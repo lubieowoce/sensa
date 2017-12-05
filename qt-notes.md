@@ -62,8 +62,7 @@ Optional signal values are why `reactive` has two versions of `@update` (see its
 **`QSignalMapper`**
 [docs](http://doc.qt.io/qt-5/qsignalmapper.html)
 
-It's for bundling many signals together, but giving each an identifier so you can know which signal fired.
-
+It's for bundling many signals together, but giving each an identifier so you can know which signal fired.  
 Might come in handy: [Figuring out why QSignalMapper doesnt work](http://pysnippet.blogspot.com/2010/09/pyqt-and-signal-overloads.html)
 
 
@@ -157,5 +156,5 @@ Useful if you want something to listen for many actions at once.
 
 # Useful methods
 
-### `QWidget.setFixed<Width|Height>(int) -> None`
+`QWidget.setFixed<Width|Height>(int) -> None`
 
