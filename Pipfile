@@ -20,6 +20,7 @@ scikit-learn = "*"
 scipy = "*"
 shortuuid = "*"
 typing = "*"
+pyrsistent = "*"
 # end biosppy dependencies
 
 
