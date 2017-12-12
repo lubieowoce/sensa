@@ -30,6 +30,7 @@ from util import *
 from pyrsistent import (m, pmap, v, pvector, ny)
 from store import Store
 from box_counter import (BoxCounter, counter, update_counter)
+import box_counter as bc
 
 current_id = [0]
 def get_id() -> int:
@@ -43,22 +44,40 @@ def get_id() -> int:
 co1 = counter(id=get_id())
 co2 = counter(id=get_id())
 
+# A useful guide:
+# https://redux.js.org/docs/recipes/reducers/BasicReducerStructure.html#basic-state-shape
+# "Because the store represents the core of your application,
+# you should define your state shape in terms of your domain data and app state,
+# not your UI component tree"
 
 def update_child_with(child_update):
-	"""Returns a function which will forward actions targeted at an id to the child with that id using the `child_update` reducer"""
+	"""
+	Returns a function which will forward actions targeted at an id
+	to the child with that id using the `child_update` reducer
+	"""
 	def update_child(states: PMap_[Id, WidgetState], action: Action) -> PMap_[Id, WidgetState]:
 		""" Forwards an action targeted at an id to the child with that id """
 		id = action.id
 		return states.transform([id], lambda state: child_update(state, action))
 	return update_child
 
+
+
 def update(state: PMap_[str, Any], action: Action):
-	return state.transform(['counters'],
-						   lambda counters: update_child_with(update_counter)(counters, action))
+	if action.type in [bc.INCREMENT, bc.DECREMENT]:
+		return state.transform(['counters'],
+							   lambda counters: update_child_with(update_counter)(counters, action))
+	else:
+		return state
+
 
 # store
 state = m(counters=pmap({co1.id : co1, co2.id : co2}))
 store = Store(state, update)
+
+#TODO: add something like connect() for mapping store state onto the UI widget tree
+# https://github.com/reactjs/react-redux/blob/master/docs/api.md#connectmapstatetoprops-mapdispatchtoprops-mergeprops-options
+# so that individual widgets don't call the store directly like they do now. 
 
 class App(QMainWindow):
 
@@ -88,7 +107,8 @@ class App(QMainWindow):
 			counters_h.insertWidget(counters_h.count() - 1,
 									BoxCounter(name="counter "+str(counter_s_id), 
 										       state=counter_s,
-										       store=store))
+										       store=store,
+										       path=['counters', counter_s_id]))
 		app.setLayout(counters_h)
 		win.show()
 
@@ -99,6 +119,8 @@ class App(QMainWindow):
 		center_point = QDesktopWidget().availableGeometry().center()
 		window_rect.moveCenter(center_point)
 		win.move(window_rect.topLeft())
+
+
 
 # class App(QMainWindow):
 

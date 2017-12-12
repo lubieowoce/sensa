@@ -11,13 +11,14 @@ from pyrsistent import m
 
 class BoxCounter(QGroupBox):
 
-	def __init__(box, name, state, store):
+	def __init__(box, name, state, store, path: Iterable[Any]):
 		QGroupBox.__init__(box)
 
 		# m(counter=...)
 		box.state = state
 		box.store = store
-		store.subscribe(box.update_this_state)
+		box.path = path
+		store.subscribe(box.update_state, path)
 		
 		box.setTitle(name)
 
@@ -38,34 +39,31 @@ class BoxCounter(QGroupBox):
 		box.setLayout(vbox)
 		box.setFixedWidth(150)
 
-		box.r_render()
+		box.update_widget()
 
 		# box.r_update()
 
 
 	def increment(box):
 		act = increment(n=1, id=box.state.id) 
-		print("sending", act)
 		box.store.dispatch(act)
 
 	def decrement(box):
 		act = decrement(n=1, id=box.state.id)
-		print("sending", act)
 		box.store.dispatch(act)
 
 
 	# def set_state(box, new_props):
 	# 	box.state = new_props
 
-	def r_render(box):
+	def update_widget(box):
 		# 'counter_display', 'str .> setText', 'counter'
-		print("rendering")
 		box.counter_display.setText( str(box.state.counter) )
 
-	def update_this_state(box):
+	def update_state(box, new_state):
 		# dependent on the store layout
-		box.state = box.store.get_state().counters[box.state.id]
-		box.r_render()
+		box.state = new_state
+		box.update_widget()
 
 
 INCREMENT = "INCREMENT"
