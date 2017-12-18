@@ -6,7 +6,12 @@ from itertools import islice
 
 K = TypeVar('K'); A = TypeVar('A')
 
-
+def rangeb(low: int, high: int, step: int = 1):
+	"""
+	Like range, but including the last element.
+	rangeb(n, k) == range(n, k+1)
+	"""
+	return range(low, high+1, step)
 
 def err_unsupported_action(action, state):
 	raise ValueError("action " + str(action)+ " is not supported in state " + str(state) )
@@ -28,6 +33,10 @@ def get(x, path: Iterable[Any]):
 		res = res[index]
 	return res
 
+
+
+def only_keys(dict: Dict[K, A], keys: Iterable[K]) -> Dict[K, A]:
+	return {key: dict[key] for key in keys}
 
 
 def id_(x): return x

@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
 	QVBoxLayout,
 	QGroupBox,
 	QLabel,
-
 	QLineEdit,
 )
 from PyQt5.QtCore import (
@@ -29,11 +28,16 @@ from util import *
 
 from pyrsistent import (m, pmap, v, pvector, ny)
 from store import Store
-from box_counter import (BoxCounter, counter, update_counter)
-import box_counter as bc
+
+from counter import (Counter, counter, update_counter)
+import counter as bc
+
+# from counter_list import (CounterList, counter_list, update_counter_list)
+
 
 current_id = [0]
-def get_id() -> int:
+
+def get_id() -> Id:
 	global current_id
 
 	id = current_id[0]
@@ -41,14 +45,21 @@ def get_id() -> int:
 
 	return id
 
-co1 = counter(id=get_id())
-co2 = counter(id=get_id())
+def get_ids(n: int) -> List[Id]:
+	ids = []
+	for _ in range(n):
+		ids.append(get_id())
+	return ids
+
 
 # A useful guide:
 # https://redux.js.org/docs/recipes/reducers/BasicReducerStructure.html#basic-state-shape
 # "Because the store represents the core of your application,
 # you should define your state shape in terms of your domain data and app state,
 # not your UI component tree"
+
+
+
 
 def update_child_with(child_update):
 	"""
@@ -71,13 +82,11 @@ def update(state: PMap_[str, Any], action: Action):
 		return state
 
 
-# store
-state = m(counters=pmap({co1.id : co1, co2.id : co2}))
+cos = [counter(id) for id in get_ids(10)]
+state = m(counters=pmap({co.id: co for co in cos}))
 store = Store(state, update)
 
-#TODO: add something like connect() for mapping store state onto the UI widget tree
-# https://github.com/reactjs/react-redux/blob/master/docs/api.md#connectmapstatetoprops-mapdispatchtoprops-mergeprops-options
-# so that individual widgets don't call the store directly like they do now. 
+
 
 class App(QMainWindow):
 
@@ -100,15 +109,15 @@ class App(QMainWindow):
 
 		counters_h = QHBoxLayout()
 		counters_h.addStretch(1)
-		# counters = QWidget()
+		# counters = QWidget() 
 		# counters.setLayout(counters_h)
 
 		for counter_s_id, counter_s in store.get_state().counters.items():
 			counters_h.insertWidget(counters_h.count() - 1,
-									BoxCounter(name="counter "+str(counter_s_id), 
-										       state=counter_s,
-										       store=store,
-										       path=['counters', counter_s_id]))
+									Counter(name="counter "+str(counter_s_id), 
+									        state=counter_s,
+									        store=store,
+									        path=v('counters', counter_s_id)) )
 		app.setLayout(counters_h)
 		win.show()
 
@@ -119,6 +128,16 @@ class App(QMainWindow):
 		center_point = QDesktopWidget().availableGeometry().center()
 		window_rect.moveCenter(center_point)
 		win.move(window_rect.topLeft())
+
+
+
+
+if __name__ == '__main__':
+	main_thread = QApplication(sys.argv)
+	win = App()
+	sys.exit(main_thread.exec_())
+
+
 
 
 
@@ -245,12 +264,6 @@ class App(QMainWindow):
 
 
 
-if __name__ == '__main__':
-	main_thread = QApplication(sys.argv)
-	win = App()
-	# main_thread.exec_()
-	sys.exit(main_thread.exec_())
-	# return win
 
 # def run():
 #     """For repl use. Doesn't work, because Qt blocks the thread :/"""
@@ -260,23 +273,5 @@ if __name__ == '__main__':
 #     # sys.exit(main_thread.exec_())
 #     return win
 
-# class MainWindow(QMainWindow):      # class MainWindow inherits QMainWindow (class for program's main window purposes, inherits more general QWidget)
-#     def __init__(win):             # __init__ is a constructor, win as a parameter represents instance of the object which calls the method
-#                                     # (a reference to an object that is being created)
-#                                     # 'win' name goes by convention.
-#         super().__init__()          # super() returns parent object of the MainWindow class (here: QMainWindow) and then it's constructor is called
-		
-#     def createUI(win):
-#         win.setWindowTitle("Sensa")
 
 
-# main_thread = QApplication(sys.argv)             # mainthread is an application object, sys.argv - list of arguments form command line
-# mw = MainWindow()
-# mw.createUI()
-
-# screen_width = mainthread.desktop().screenGeometry().width()
-# screen_height = mainthread.desktop().screenGeometry().height()
-
-# mw.setGeometry(screen_width/20, screen_height/20, screen_width/1.1, screen_height/1.1)      #i will rewrite this
-# mw.show()                                      # show the widget and its children
-# sys.exit(mainthread.exec())                    # Enters the main event loop and waits until exit() is called, then returns the value that was passed to exit()

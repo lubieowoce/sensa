@@ -1,4 +1,4 @@
-from pyrsistent import l
+from pyrsistent import v
 from types_util import *
 from util import get
 
@@ -9,7 +9,7 @@ class Store:
 		store.update_fn = update_fn
 		store.cur_sub_id = 0
 
-	def subscribe(store, sub_fun, path:Iterable[Any]=l()):
+	def subscribe(store, sub_fun, path:Iterable[Any]=v()):
 		"""
 		Path - a list of indexes, to extract some nested bit of state.
 		When the store's state changes, it will call

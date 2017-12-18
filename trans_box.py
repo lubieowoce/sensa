@@ -19,6 +19,10 @@ from signal import Signal
 from util import chain, dict_set_all, setitem
 from operator import itemgetter
 
+
+raise NotImplementedError()
+
+
 class TransBox(QGroupBox, Reactive):
 	param_changed = pyqtSignal(name='param_changed')
 

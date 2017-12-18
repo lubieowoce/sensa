@@ -9,6 +9,7 @@ from typing import (
 	TypeVar,
 	Optional,
 	Iterable,
+	IO,
 )
 
 from pyrsistent import (
@@ -20,9 +21,9 @@ from pyrsistent import (
 
 Hz = 1
 
-class PMap_(Dict):
+class PMap_(Generic[TypeVar('K'), TypeVar('A')]):
 	pass
-class PVector_(List):
+class PVector_(Generic[TypeVar('A')]):
 	pass
 
 WidgetState = PMap_[str, Any]

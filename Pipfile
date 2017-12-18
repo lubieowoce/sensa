@@ -1,27 +1,17 @@
 [[source]]
 
-url = "https://pypi.python.org/simple"
 verify_ssl = true
 name = "pypi"
+url = "https://pypi.python.org/simple"
 
 
 [packages]
 
-"0d359d3" = {path = ".\\numpy_installer\\numpy-1.13.3+mkl-cp35-cp35m-win32.whl"}
 mypy = "*"
-"pyqt5" = "*"
-biosppy = "*"
-six = "*"
-bidict = "*"
-"h5py" = "*"
-matplotlib = "*"
-numpy = "*"
-scikit-learn = "*"
-scipy = "*"
-shortuuid = "*"
 typing = "*"
+imgui = {extras = ["full"]}
+"970d486" = {path = ".\\whl\\x64\\numpy\\numpy-1.13.3+mkl-cp35-cp35m-win_amd64.whl"}
 pyrsistent = "*"
-# end biosppy dependencies
 
 
 [requires]
