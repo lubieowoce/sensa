@@ -7,79 +7,97 @@ import imgui as im
 from imgui.integrations.glfw import GlfwRenderer
 
 from time import sleep
+from pyrsistent import (m, pmap, v, pvector)
 
-from util import rangeb
+from types_util import *
+from util import rangeb, get_id, get_ids
 from imgui_widget import (window, group, child)
+from counter import *
+from counter_list import *
 
 MAX_AVAILABLE_SIZE = 0
 NO_FLAGS = 0
 
-id = 0
-def new_id():
-    global id
-    the_id = id
-    id += 1
-    return the_id
+
+
 
 n_counters = 4
-state = {
-    'counters': {
-        n: 0 for n in rangeb(0, n_counters)
-    }
-}
+
+cos = [counter(id) for id in get_ids(n_counters)]
+state = m(counters=pmap({co.id: co for co in cos}))
 
 
-def draw(state):
+def update(state: PMap_[str, Any], action: Action):
+
+    if action.type in [ADD_COUNTER, REMOVE_COUNTER]:
+        return state.transform(['counters'],
+                                lambda counters: update_counter_list(counters, action))
+    elif action.type in [INCREMENT, DECREMENT, SET_VALUE]:
+        id = action.id
+        return state.transform(['counters', id],
+                               lambda counter: update_counter(counter, action))
+    else:
+        return state
+
+
+
+
+def draw():
     """
     imgui.new_frame() is called right before `draw` in main.
     imgui.render() is called `draw` returns.
     """
+    global state
+
+    actions = []
+    def emit(action):
+        actions.append(action)
+
     with window(name="eeh"):
         im.text("counters")
-        with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
-            with child(name="add+delete",  width=40, height=100):
+        # with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
+        with child(name="add+delete",  width=40, height=100,
+                   styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
 
-                if im.button("+", width=30, height=30):
-                    if len(state['counters']) <= 0:
-                        state['counters'][0] = 0
-                    else: # len(state['counters']) > 0
-                        id = max(state['counters']) + 1
-                        state['counters'][id] = 0
-                    
-                if im.button("-", width=30, height=30):
-                    if len(state['counters']) > 0:
-                        last_id = max(state['counters'])
-                        del state['counters'][last_id]
+            if im.button("+", width=30, height=30):
+                emit(add_counter())
+                
+            if im.button("-", width=30, height=30):
+                emit(remove_counter())
 
-            # im.end_child()
 
         im.same_line()
-        for id in state['counters']:
+        for id in state.counters:
 
-            with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
-                with child(name="counter "+str(id), width=100, height=100, border=True):
+            with child(name="counter "+str(id), width=100, height=100, border=True,
+                       styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
 
-                    im.text(str(state['counters'][id]))
+                im.text(str(state.counters[id].val))
 
-                    imgui.separator()
+                imgui.separator()
 
-                    changed, new_val = \
-                        im.input_text('value', value=str(state['counters'][id]),
-                                      buffer_length=1000,
-                                      flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
-                    if changed:
-                        state['counters'][id] = int(new_val)
+                changed, new_val = \
+                    im.input_text('value', value=str(state.counters[id].val),
+                                  buffer_length=1000,
+                                  flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
+                if changed:
+                    emit( set_value(new_val, id) )
 
 
-                    if im.button("+"):
-                        state['counters'][id] += 1
+                if im.button("+"):
+                    emit( increment(1, id) )
 
-                    if im.button("-"):
-                        state['counters'][id] -= 1
+                if im.button("-"):
+                    emit( decrement(1, id))
 
             im.same_line()
 
         im.new_line()
+
+        st = state
+        for act in actions:
+            st = update(st, act)
+        state = st
 
 
 
@@ -95,7 +113,6 @@ def main():
     frame_dur = 0.
     wait_dur = 0.
 
-    global state
 
     while not glfw.window_should_close(window):
 
@@ -107,7 +124,7 @@ def main():
         imgui.new_frame()
         
 
-        draw(state) # defined above
+        draw() # defined above
 
 
         gl.glClearColor(1., 1., 1., 1)

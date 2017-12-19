@@ -1,55 +1,76 @@
-from PyQt5.QtWidgets import (
-	QWidget, 
-	QPushButton,
-	QHBoxLayout,
-	QVBoxLayout,
-	QGroupBox,
-	QLabel,
-)
+from util import get_id, err_unsupported_action
 
 from types_util import *
 from pyrsistent import (m, pmap, v, pvector)
 
-class CounterList(QWidget):
-	def __init__(clist, state, store, path):
-
-		super().__init__(clist)
-
-		clist.state = state
-		clist.store = store
-		clist.path  = path
-
-		hbox = QHBoxLayout()
-
-		counters = QWidget()
-		counters_h = QHBoxLayout()
-		counters_h.addStretch(1)
-		counters.setLayout(counters_h)
-
-
-		add_btn = QPushButton('+')
-		add_btn.resize(add_btn.sizeHint())
-		add_btn.clicked.connect( store.dispatch(add_widget(clist.state.id)) )
-
-		remove_btn = QPushButton('-')
-		remove_btn.resize(remove_btn.sizeHint())
-		remove_btn.clicked.connect( store.dispatch(remove_widget(clist.state.id)) )
-
-		# TODO: implement state passing.
-		# Counterlist should handle subscribing to the store
-		# and then passing the state to the counters. (its children, like in React!)
-		# Also Would work elegantly with that StateUpdater / Provider thing!
-
-
-
+from counter import counter
 
 counter_list = lambda id: m(id=id, items=v())
 
-ADD_WIDGET    = "ADD_WIDGET"
-REMOVE_WIDGET = "REMOVE_WIDGET"
+ADD_COUNTER    = "ADD_COUNTER"
+REMOVE_COUNTER = "REMOVE_COUNTER"
 
-add_widget    = lambda id: m(type=ADD_WIDGET,    id=id)
-remove_widget = lambda id: m(type=REMOVE_WIDGET, id=id)
+add_counter    = lambda: m(type=ADD_COUNTER)
+remove_counter    = lambda: m(type=REMOVE_COUNTER)
+# remove_widget = lambda id: m(type=REMOVE_COUNTER, id=id)
+
+def update_counter_list(counters, action):
+	if action.type == ADD_COUNTER:
+		id = get_id()
+		return counters.set(id, counter(id))
+	elif action.type == REMOVE_COUNTER:
+		if len(counters) > 0:
+			max_id = max(counters.keys())
+			return counters.remove(max_id)
+		else: # len(counters) <= 0
+			return counters
+	else:
+		err_unsupported_action(counters, action)
+		return counters
+
+
+
+# from PyQt5.QtWidgets import (
+# 	QWidget, 
+# 	QPushButton,
+# 	QHBoxLayout,
+# 	QVBoxLayout,
+# 	QGroupBox,
+# 	QLabel,
+# )
+# class CounterList(QWidget):
+# 	def __init__(clist, state, store, path):
+
+# 		super().__init__(clist)
+
+# 		clist.state = state
+# 		clist.store = store
+# 		clist.path  = path
+
+# 		hbox = QHBoxLayout()
+
+# 		counters = QWidget()
+# 		counters_h = QHBoxLayout()
+# 		counters_h.addStretch(1)
+# 		counters.setLayout(counters_h)
+
+
+# 		add_btn = QPushButton('+')
+# 		add_btn.resize(add_btn.sizeHint())
+# 		add_btn.clicked.connect( store.dispatch(add_widget(clist.state.id)) )
+
+# 		remove_btn = QPushButton('-')
+# 		remove_btn.resize(remove_btn.sizeHint())
+# 		remove_btn.clicked.connect( store.dispatch(remove_widget(clist.state.id)) )
+
+# 		# TODO: implement state passing.
+# 		# Counterlist should handle subscribing to the store
+# 		# and then passing the state to the counters. (its children, like in React!)
+# 		# Also Would work elegantly with that StateUpdater / Provider thing!
+
+
+
+
 
 
 
@@ -88,5 +109,4 @@ remove_widget = lambda id: m(type=REMOVE_WIDGET, id=id)
 
 
 
-	def insert_widget(widget: QWidget):
 
