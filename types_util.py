@@ -9,6 +9,7 @@ from typing import (
 	TypeVar,
 	Optional,
 	Iterable,
+	Callable,
 	IO,
 )
 
@@ -31,6 +32,8 @@ WidgetState = PMap_[str, Any]
 Id = int
 
 Action = PMap_[str, Any]
+
+Func = Callable
 
 
 # the numpy stubs from the numpy_stubs folder are passed to mypy 

@@ -17,6 +17,7 @@ def err_unsupported_action(action, state):
 	raise ValueError("action " + str(action)+ " is not supported in state " + str(state) )
 
 
+
 def get(x, path: Iterable[Any]):
 	"""
 	For exctracting elements out of nested data structures. 
@@ -28,11 +29,23 @@ def get(x, path: Iterable[Any]):
 
 	get(d, []) == d
 	"""
+	raise Exception("Use pyrsistent.get_in !!!")
 	res = x
 	for index in path:
 		res = res[index]
 	return res
 
+def set_in(x, *path_n_values: List[ Tuple[Iterable[Any], Any] ]):
+	""" For setting values inside nested data structures. """
+	transformations = []
+	while path_n_values:
+		path, val, *path_n_values = path_n_values
+		transformations.extend([path, const(val)])
+
+	return x.transform(*transformations)
+
+
+const = lambda x: (lambda _: x)
 
 current_id = 0
 

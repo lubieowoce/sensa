@@ -24,7 +24,8 @@ NO_FLAGS = 0
 n_counters = 4
 
 cos = [counter(id) for id in get_ids(n_counters)]
-state = m(counters=pmap({co.id: co for co in cos}))
+state = m(counters=    pmap(   {co.id: co for co in cos}),
+          counter_list=pvector([co.id     for co in cos])  )
 
 frame_actions = [] # all the actions that happened during current frame
 def emit(action):
@@ -36,10 +37,11 @@ def clear_actions():
 
 
 def update(state: PMap_[str, Any], action: Action):
+    # state = { counters: {id: counter},
+    #           counter_list: [id]       }
+    if action.type in [ADD_COUNTER, REMOVE_COUNTER, CLEAR_COUNTERS]:
+        return update_counter_list(state, action)
 
-    if action.type in [ADD_COUNTER, REMOVE_COUNTER]:
-        return state.transform(['counters'],
-                                lambda counters: update_counter_list(counters, action))
     elif action.type in [INCREMENT, DECREMENT, SET_VALUE]:
         id = action.id
         return state.transform(['counters', id],
@@ -64,6 +66,8 @@ def draw():
     imgui.render() is called `draw` returns.
     """
     global state
+    # state = { counters: {id: counter},
+    #           counter_list: [id]       }
 
     assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
 
@@ -80,30 +84,33 @@ def draw():
             if im.button("-", width=30, height=30):
                 emit(remove_counter())
 
+            if im.button("clear", width=30, height=30):
+                emit(clear_counters())
+
 
         im.same_line()
-        for id in state.counters:
+        for id in state.counter_list:
 
             with child(name="counter "+str(id), width=100, height=100, border=True,
-                       styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
+                       styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}) as is_counter_visible:
+                if is_counter_visible:
+                    im.text(str(state.counters[id].val))
 
-                im.text(str(state.counters[id].val))
+                    imgui.separator()
 
-                imgui.separator()
-
-                changed, new_val = \
-                    im.input_text('value', value=str(state.counters[id].val),
-                                  buffer_length=1000,
-                                  flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
-                if changed:
-                    emit( set_value(new_val, id) )
+                    changed, new_val = \
+                        im.input_text('value', value=str(state.counters[id].val),
+                                      buffer_length=1000,
+                                      flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
+                    if changed:
+                        emit( set_value(new_val, id) )
 
 
-                if im.button("+"):
-                    emit( increment(1, id) )
+                    if im.button("+"):
+                        emit( increment(1, id) )
 
-                if im.button("-"):
-                    emit( decrement(1, id))
+                    if im.button("-"):
+                        emit( decrement(1, id))
 
             im.same_line()
 
@@ -126,6 +133,7 @@ def point_delta(a: Tuple[float, float], b: Tuple[float, float]) -> Tuple[float, 
 
 
 def main():
+    print(state)
     window = impl_glfw_init()
     impl = GlfwRenderer(window)
     io = imgui.get_io()

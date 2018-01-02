@@ -1,29 +1,53 @@
-from util import get_id, err_unsupported_action
+from util import (get_id, err_unsupported_action)
 
 from types_util import *
-from pyrsistent import (m, pmap, v, pvector)
+from pyrsistent import (m, pmap, v, pvector, thaw, freeze)
 
 from counter import counter
 
-counter_list = lambda id: m(id=id, items=v())
+# counter_list = lambda id: m(id=id, items=v())
 
 ADD_COUNTER    = "ADD_COUNTER"
 REMOVE_COUNTER = "REMOVE_COUNTER"
+CLEAR_COUNTERS = "CLEAR_COUNTERS"
 
 add_counter    = lambda: m(type=ADD_COUNTER)
 remove_counter    = lambda: m(type=REMOVE_COUNTER)
+clear_counters    = lambda: m(type=CLEAR_COUNTERS)
 # remove_widget = lambda id: m(type=REMOVE_COUNTER, id=id)
 
-def update_counter_list(counters, action):
+def update_counter_list(state, action):
+	# state = { counters: {id: co}, counter_list: [id]}
 	if action.type == ADD_COUNTER:
 		id = get_id()
-		return counters.set(id, counter(id))
+		# return \
+		# 	state.transform(
+		# 		   ['counters'], lambda counters: counters.set(id, counter(id)),
+		# 		   ['counter_list'], lambda list: list.append(id) )
+		st = thaw(state)
+		st['counters'][id] = counter(id)
+		st['counter_list'].append(id)
+		return freeze(st)
+
 	elif action.type == REMOVE_COUNTER:
-		if len(counters) > 0:
-			max_id = max(counters.keys())
-			return counters.remove(max_id)
+		if len(state.counter_list) > 0:
+			list = state.counter_list
+			id = list[len(list)-1]
+			# return \
+			# 	state.transform(
+			# 		['counters'], lambda counters: counters.delete(id)
+			# 		['counter_list'], lambda list: list.delete(len(list)-1) )
+			st = thaw(state)
+			st['counters'].pop(id)
+			st['counter_list'].pop()
+			return freeze(st)
+
 		else: # len(counters) <= 0
-			return counters
+			return state
+
+	elif action.type == CLEAR_COUNTERS:
+		return \
+		 	state.set('counters', m()).set('counter_list', v())
 	else:
 		err_unsupported_action(counters, action)
 		return counters
