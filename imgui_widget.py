@@ -1,4 +1,5 @@
 from functools import partial
+from contextlib import contextmanager
 
 import imgui
 
@@ -41,3 +42,23 @@ window = partial(IM, begin=imgui.begin, end=imgui.end)
 group  = partial(IM, begin=imgui.begin_group, end=imgui.end_group)
 child  = partial(IM, begin=imgui.begin_child, end=imgui.end_child)
 
+
+# @contextmanager
+# def child(**kwargs):
+# 	styles = kwargs.pop('styles', None)
+# 	args = kwargs
+
+# 	if styles != None:
+# 		for name, value in styles.items():
+# 			imgui.push_style_var(name, value)
+
+# 	is_visible = imgui.begin_child(**args)
+	
+# 	# if is_visible:
+# 	# 	yield is_visible
+# 	yield is_visible
+
+# 	imgui.end_child()
+
+# 	if styles != None:
+# 		imgui.pop_style_var(len(styles))

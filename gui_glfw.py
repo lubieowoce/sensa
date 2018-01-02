@@ -26,6 +26,14 @@ n_counters = 4
 cos = [counter(id) for id in get_ids(n_counters)]
 state = m(counters=pmap({co.id: co for co in cos}))
 
+frame_actions = [] # all the actions that happened during current frame
+def emit(action):
+    frame_actions.append(action)
+
+def clear_actions():
+    frame_actions.clear()
+
+
 
 def update(state: PMap_[str, Any], action: Action):
 
@@ -40,6 +48,14 @@ def update(state: PMap_[str, Any], action: Action):
         return state
 
 
+def update_state_with_actions():
+    global state
+    global frame_actions
+
+    st = state
+    for act in frame_actions:
+        st = update(st, act)
+    state = st
 
 
 def draw():
@@ -49,9 +65,8 @@ def draw():
     """
     global state
 
-    actions = []
-    def emit(action):
-        actions.append(action)
+    assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
+
 
     with window(name="eeh"):
         im.text("counters")
@@ -94,16 +109,26 @@ def draw():
 
         im.new_line()
 
-        st = state
-        for act in actions:
-            st = update(st, act)
-        state = st
+    im.show_metrics_window()
+
+    im.text(str(frame_actions))
+
+    with window(name="waveform"):
+        draw_list = im.get_window_draw_list()
+
+        red = (1,0,0,1)
+        draw_list.add_line( im.Vec2(40, 60), im.Vec2(110, 150), color=red )
+        
+
+def point_delta(a: Tuple[float, float], b: Tuple[float, float]) -> Tuple[float, float]:
+    return (b[0]-a[0], b[1]-a[1])
 
 
 
 def main():
     window = impl_glfw_init()
     impl = GlfwRenderer(window)
+    io = imgui.get_io()
 
     target_framerate = 30.
     max_frame_dur = 1/target_framerate
@@ -113,6 +138,31 @@ def main():
     frame_dur = 0.
     wait_dur = 0.
 
+    prev_mouse_pos = (0, 0)
+    mouse_pos = (0, 0)
+    prev_mouse_down_0 = False
+    prev_frame_click_0_finished = False
+
+    def got_input() -> bool:
+        """
+        Checks if the user sent any left-mouse mouse inputs, like moving/clicking the mouse
+        """
+
+        nonlocal prev_mouse_pos
+        nonlocal prev_mouse_down_0
+        nonlocal prev_frame_click_0_finished
+
+        mouse_moved = (io.mouse_pos != prev_mouse_pos)
+        mouse_changed = io.mouse_down[0] != prev_mouse_down_0
+        click_0_finished = prev_mouse_down_0 and (not io.mouse_down[0]) # mouse was down previous frame, now it's up
+        # key_clicked = any(io.keys_down)
+        result =  mouse_moved or mouse_changed or io.mouse_down[0] or prev_frame_click_0_finished # or key_clicked
+
+        prev_mouse_pos = io.mouse_pos
+        prev_mouse_down_0 = io.mouse_down[0]
+        prev_frame_click_0_finished = click_0_finished
+        return result
+
 
     while not glfw.window_should_close(window):
 
@@ -121,17 +171,29 @@ def main():
         glfw.poll_events()
         impl.process_inputs()
 
-        imgui.new_frame()
+        got_inp = got_input()
+
+
+        if got_inp:
+            imgui.new_frame()
+    
+
+            draw() # defined above
+
+            update_state_with_actions()
+            clear_actions()
+
+
+            gl.glClearColor(1., 1., 1., 1)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+
+            imgui.render()
+
+            glfw.swap_buffers(window)
+
+
+
         
-
-        draw() # defined above
-
-
-        gl.glClearColor(1., 1., 1., 1)
-        gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-
-        imgui.render()
-        glfw.swap_buffers(window)
 
         frame_end = glfw.get_time() # seconds
         frame_dur = frame_end - frame_start
