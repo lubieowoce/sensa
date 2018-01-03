@@ -10,33 +10,37 @@ from time import sleep
 from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
-from util import rangeb, get_id, get_ids
+from util import rangeb
+from id_eff import id_and_effects, run_id_eff, get_ids
 from imgui_widget import (window, group, child)
 from counter import *
 from counter_list import *
 
-MAX_AVAILABLE_SIZE = 0
-NO_FLAGS = 0
+from files import *
+from signal import Signal
+# from multisignal import MultiSignal
+# from filters import \
+#     lowpass_filter,  make_lowpass_tr, \
+#     highpass_filter, make_highpass_tr
+# from trans import Trans, TransChain
 
 
+current_id = 0
 
 
-n_counters = 4
-
-cos = [counter(id) for id in get_ids(n_counters)]
-state = m(counters=    pmap(   {co.id: co for co in cos}),
-          counter_list=pvector([co.id     for co in cos])  )
-
-frame_actions = [] # all the actions that happened during current frame
-def emit(action):
-    frame_actions.append(action)
-
-def clear_actions():
-    frame_actions.clear()
+@id_and_effects
+def initial_state() -> IdEff[PMap_[str, Any]]:
+    n_counters = 4
+    cos = [counter(id) for id in get_ids(n_counters)]
+    return m(counters=    pmap(   {co.id: co for co in cos}),
+             counter_list=pvector([co.id     for co in cos])  )
 
 
+state, current_id, _ = run_id_eff(initial_state, id=current_id)()
 
-def update(state: PMap_[str, Any], action: Action):
+
+@id_and_effects
+def update(state: PMap_[str, Any], action: Action) -> IdEff[PMap_[str, Any]]:
     # state = { counters: {id: counter},
     #           counter_list: [id]       }
     if action.type in [ADD_COUNTER, REMOVE_COUNTER, CLEAR_COUNTERS]:
@@ -46,18 +50,45 @@ def update(state: PMap_[str, Any], action: Action):
         id = action.id
         return state.transform(['counters', id],
                                lambda counter: update_counter(counter, action))
+
+    elif action.type in [LOAD_FILE]:
+        emit_effect( load_file_eff(action.filename) )
+        return state
     else:
         return state
+
+
+data = {'signals':{}}
+
+def handle(data, command):
+    if command.type in [LOAD_FILE_EFF]:
+        handle_load_file(data['signals'], command)
+
+
+
+
+frame_actions = [] # all the actions that happened during current frame
+
+def emit(action):
+    frame_actions.append(action)
+
+def clear_actions():
+    frame_actions.clear()
 
 
 def update_state_with_actions():
     global state
     global frame_actions
+    global current_id
 
-    st = state
+    all_effects = []
     for act in frame_actions:
-        st = update(st, act)
-    state = st
+        state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
+        all_effects.extend(effects)
+
+    for eff in all_effects:
+        handle(data, eff)
+
 
 
 def draw():
@@ -66,6 +97,7 @@ def draw():
     imgui.render() is called `draw` returns.
     """
     global state
+    global data
     # state = { counters: {id: counter},
     #           counter_list: [id]       }
 
@@ -121,19 +153,42 @@ def draw():
     im.text(str(frame_actions))
 
     with window(name="waveform"):
+        window_pos = im.get_window_position()
         draw_list = im.get_window_draw_list()
 
         red = (1,0,0,1)
-        draw_list.add_line( im.Vec2(40, 60), im.Vec2(110, 150), color=red )
+        draw_list.add_line(point_offset(window_pos, im.Vec2(40, 60)),
+                           point_offset(window_pos, im.Vec2(110, 150)),
+                           color=red)
+
+    with window(name="signals"):
+        if im.button("load example"):
+            emit(load_file(example_file))
+
+
+        if len(data['signals']) > 0:
+            im.separator()
+
+        for label, signal in data['signals'].items():
+            im.text_colored(label, 0.2, 0.8, 1)
+            im.same_line()
+            im.text(str(signal))
         
 
-def point_delta(a: Tuple[float, float], b: Tuple[float, float]) -> Tuple[float, float]:
-    return (b[0]-a[0], b[1]-a[1])
 
+
+
+
+
+def point_delta(a: im.Vec2, b: im.Vec2) -> im.Vec2:
+    return im.Vec2(b.x-a.x, b.y-a.y)
+
+def point_offset(a: im.Vec2, b: im.Vec2) -> im.Vec2:
+    return im.Vec2(b.x+a.x, b.y+a.y)
 
 
 def main():
-    print(state)
+
     window = impl_glfw_init()
     impl = GlfwRenderer(window)
     io = imgui.get_io()

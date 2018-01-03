@@ -4,7 +4,6 @@ from functools import partial
 from itertools import islice
 
 
-K = TypeVar('K'); A = TypeVar('A')
 
 def rangeb(low: int, high: int, step: int = 1):
 	"""
@@ -45,31 +44,21 @@ def set_in(x, *path_n_values: List[ Tuple[Iterable[Any], Any] ]):
 	return x.transform(*transformations)
 
 
-const = lambda x: (lambda _: x)
 
-current_id = 0
 
-def get_id() -> Id:
-    global current_id
 
-    id = current_id
-    current_id += 1
 
-    return id
-
-def get_ids(n: int) -> List[Id]:
-    ids = []
-    for _ in range(n):
-        ids.append(get_id())
-    return ids
-    
 
 
 def only_keys(dict: Dict[K, A], keys: Iterable[K]) -> Dict[K, A]:
 	return {key: dict[key] for key in keys}
 
 
+def const(x): (lambda _: x)
+
 def id_(x): return x
+
+identity = id_
 
 
 
@@ -113,8 +102,8 @@ def iterate(f, seed: A) -> Iterable[A]:
 
 def take(n: int, iterable: Iterable[A]) -> List[A]:
 
-    "Return first n items of the iterable as a list"
-    return list(islice(iterable, n))
+	"Return first n items of the iterable as a list"
+	return list(islice(iterable, n))
 
 
 

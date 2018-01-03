@@ -22,18 +22,27 @@ from pyrsistent import (
 
 Hz = 1
 
-class PMap_(Generic[TypeVar('K'), TypeVar('A')]):
+TV = TypeVar
+K = TV('K'); A = TV('A'); B = TV('B'); C=TV('C')
+
+class PMap_(Generic[K, A]):
 	pass
-class PVector_(Generic[TypeVar('A')]):
+class PVector_(Generic[A]):
+	pass
+
+class IdEff(Generic[A]):
+	""" A computation of type A that uses `get_id` and `emit_effect` """
 	pass
 
 WidgetState = PMap_[str, Any]
 
 Id = int
+Effect = Any
 
 Action = PMap_[str, Any]
 
-Func = Callable
+Fun = Callable  # Fun[[int, str], float]  ==  (int, str) -> float
+Anys = [Any]
 
 
 # the numpy stubs from the numpy_stubs folder are passed to mypy 

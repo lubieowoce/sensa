@@ -1,8 +1,8 @@
-from util import (get_id, err_unsupported_action)
+from util import (err_unsupported_action)
 
 from types_util import *
 from pyrsistent import (m, pmap, v, pvector, thaw, freeze)
-
+from id_eff import id_and_effects, is_in_id_eff
 from counter import counter
 
 # counter_list = lambda id: m(id=id, items=v())
@@ -12,12 +12,14 @@ REMOVE_COUNTER = "REMOVE_COUNTER"
 CLEAR_COUNTERS = "CLEAR_COUNTERS"
 
 add_counter    = lambda: m(type=ADD_COUNTER)
-remove_counter    = lambda: m(type=REMOVE_COUNTER)
-clear_counters    = lambda: m(type=CLEAR_COUNTERS)
-# remove_widget = lambda id: m(type=REMOVE_COUNTER, id=id)
+remove_counter = lambda: m(type=REMOVE_COUNTER)
+clear_counters = lambda: m(type=CLEAR_COUNTERS)
 
-def update_counter_list(state, action):
+@id_and_effects
+def update_counter_list(state, action) -> IdEff[PMap_[str, Any]]:
 	# state = { counters: {id: co}, counter_list: [id]}
+
+
 	if action.type == ADD_COUNTER:
 		id = get_id()
 		# return \
@@ -52,7 +54,29 @@ def update_counter_list(state, action):
 		err_unsupported_action(counters, action)
 		return counters
 
+# def uuu(state, action) -> IdEff[PMap_[str, Any]]:
+# 	# state = { counters: {id: co}, counter_list: [id]}
+# 	# assert is_in_id_eff(), "is_in_id_eff failed."
+# 	assert "get_id" in globals(), "get_id not in globals in update. globals:" + str(dict(globals()))
+# 	# print("is_in_id_eff:", is_in_id_eff())
+# 	# print("get_id(g):", globals()['get_id'])
+# 	# print("get_id(n):", get_id)
 
+# 	if action.type == ADD_COUNTER:
+# 		id = get_id()
+
+# def g(key):
+# 	emit_effect("jump")
+# 	d = f()
+# 	zi = get_id()
+# 	d[key] = zi
+# 	return d
+
+# def f() -> IdEff[None]:
+# 	xi = get_id()
+# 	yi = get_id()
+# 	emit_effect('print 1')
+# 	return {'x': xi, 'y': yi}
 
 # from PyQt5.QtWidgets import (
 # 	QWidget, 
