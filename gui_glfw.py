@@ -10,11 +10,13 @@ from time import sleep
 from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
-from util import rangeb
+from util import rangeb, point_offset
 from id_eff import id_and_effects, run_id_eff, get_ids
 from imgui_widget import (window, group, child)
 from counter import *
 from counter_list import *
+
+from plot import plot_data
 
 from files import *
 from signal import Signal
@@ -39,6 +41,7 @@ def initial_state() -> IdEff[PMap_[str, Any]]:
 state, current_id, _ = run_id_eff(initial_state, id=current_id)()
 
 
+
 @id_and_effects
 def update(state: PMap_[str, Any], action: Action) -> IdEff[PMap_[str, Any]]:
     # state = { counters: {id: counter},
@@ -56,6 +59,7 @@ def update(state: PMap_[str, Any], action: Action) -> IdEff[PMap_[str, Any]]:
         return state
     else:
         return state
+
 
 
 data = {'signals':{}}
@@ -153,13 +157,21 @@ def draw():
     im.text(str(frame_actions))
 
     with window(name="waveform"):
-        window_pos = im.get_window_position()
+        window_top_left = im.get_window_position()
+        window_size = im.get_window_size()
+        window_bottom_right = im.Vec2(window_top_left.x+window_size.x, window_top_left.y+window_size.y)
+
+        draw_area_top_left = im.Vec2(window_top_left.x, window_top_left.y + 20)
         draw_list = im.get_window_draw_list()
 
         red = (1,0,0,1)
-        draw_list.add_line(point_offset(window_pos, im.Vec2(40, 60)),
-                           point_offset(window_pos, im.Vec2(110, 150)),
+        draw_list.add_line(point_offset(draw_area_top_left, im.Vec2(40, 60)),
+                           point_offset(draw_area_top_left, im.Vec2(110, 150)),
                            color=red)
+        if 'C3' in data['signals']:
+            plot_data(draw_list, data['signals']['C3'].data,
+                      point_offset(draw_area_top_left, im.Vec2(10, 10)),
+                      window_bottom_right )
 
     with window(name="signals"):
         if im.button("load example"):
@@ -180,11 +192,7 @@ def draw():
 
 
 
-def point_delta(a: im.Vec2, b: im.Vec2) -> im.Vec2:
-    return im.Vec2(b.x-a.x, b.y-a.y)
 
-def point_offset(a: im.Vec2, b: im.Vec2) -> im.Vec2:
-    return im.Vec2(b.x+a.x, b.y+a.y)
 
 
 def main():
@@ -226,6 +234,9 @@ def main():
         prev_frame_click_0_finished = click_0_finished
         return result
 
+    emit(load_file(example_file))
+    update_state_with_actions()
+    clear_actions()
 
     while not glfw.window_should_close(window):
 

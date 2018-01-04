@@ -2,8 +2,13 @@ from types_util import *
 
 from functools import partial
 from itertools import islice
+import imgui as im
 
+def point_delta(a: im.Vec2, b: im.Vec2) -> im.Vec2:
+    return im.Vec2(b.x-a.x, b.y-a.y)
 
+def point_offset(a: im.Vec2, b: im.Vec2) -> im.Vec2:
+    return im.Vec2(b.x+a.x, b.y+a.y)
 
 def rangeb(low: int, high: int, step: int = 1):
 	"""

@@ -1,7 +1,7 @@
 from types_util import *
 
 class Signal:
-	def __init__(self, signal_info: Dict[str, Any], signal):
+	def __init__(self, signal_info: Dict[str, Any], data):
 		# ['patient_id', 'rec_id', 'startdate', 'starttime',
 		fields = \
 			['transducer', 'physical_dim', 'physical_min',
@@ -10,7 +10,7 @@ class Signal:
 			 'frequency', 'num_samples']
 		for field in fields:    
 			setattr(self, field, signal_info[field])
-		self.data = signal
+		self.data = data
 		self.info = signal_info
 
 	def __repr__(sig):

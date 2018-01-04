@@ -34,6 +34,12 @@ class IdEff(Generic[A]):
 	""" A computation of type A that uses `get_id` and `emit_effect` """
 	pass
 
+class IO_(Generic[A]):
+	pass
+
+class NDArray(Generic[A]):
+	pass
+
 WidgetState = PMap_[str, Any]
 
 Id = int

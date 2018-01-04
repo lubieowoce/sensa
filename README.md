@@ -26,7 +26,6 @@ Install the dependencies:
 ```
 > cd sensa
 > pipenv install
-
 ```
 Done! 👍
 (hopefully) 
@@ -39,7 +38,7 @@ Similar to Windows, but right now the Pipfile is set up to install a numpy binar
 
 ## Run
 ```
-> pipenv run python gui.py
+> pipenv run python gui_glfw.py
 ```
 
 ## Shell
