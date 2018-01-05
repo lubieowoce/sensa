@@ -179,10 +179,11 @@ def draw():
 
         if len(data['signals']) > 0:
             im.separator()
-            choices = [" - "] + labels
-            changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], choices)
+            texts   = [" - "] + labels
+            choices = [None]  + labels
+            changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], texts)
             if changed:
-                ui['plotted_channel'] = (labels[selected_ix], selected_ix)
+                ui['plotted_channel'] = (choices[selected_ix], selected_ix)
 
         def right_pad(s: str, limit: int) -> str:
             n_spaces = max(0, limit-len(s))
