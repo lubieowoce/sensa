@@ -10,7 +10,12 @@ from time import sleep
 from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
-from util import rangeb, point_offset
+from util import (
+    rangeb,
+    point_offset, point_subtract_offset,
+    add_rect, get_window_content_rect, Rect,
+    get_mouse_position
+)
 from id_eff import id_and_effects, run_id_eff, get_ids
 from imgui_widget import (window, group, child)
 from counter import *
@@ -94,6 +99,16 @@ def update_state_with_actions():
         handle(data, eff)
 
 
+ui = {
+    'plot': {
+        'start_ix': 0,
+        'dragging_plot': False,
+        'start_ix_before_drag': None,
+        # 'hovered': False,
+    },
+    'plotted_channel': (None, 0),
+    'plot_window_movable': False,
+}
 
 def draw():
     """
@@ -108,7 +123,7 @@ def draw():
     assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
 
 
-    with window(name="eeh"):
+    with window(name="counters"):
         im.text("counters")
         # with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
         with child(name="add+delete",  width=40, height=100,
@@ -152,40 +167,67 @@ def draw():
 
         im.new_line()
 
+
     im.show_metrics_window()
 
-    im.text(str(frame_actions))
-
-    with window(name="waveform"):
-        window_top_left = im.get_window_position()
-        window_size = im.get_window_size()
-        window_bottom_right = im.Vec2(window_top_left.x+window_size.x, window_top_left.y+window_size.y)
-
-        draw_area_top_left = im.Vec2(window_top_left.x, window_top_left.y + 20)
-        draw_list = im.get_window_draw_list()
-
-        red = (1,0,0,1)
-        draw_list.add_line(point_offset(draw_area_top_left, im.Vec2(40, 60)),
-                           point_offset(draw_area_top_left, im.Vec2(110, 150)),
-                           color=red)
-        if 'C3' in data['signals']:
-            plot_data(draw_list, data['signals']['C3'].data,
-                      point_offset(draw_area_top_left, im.Vec2(10, 10)),
-                      window_bottom_right )
 
     with window(name="signals"):
         if im.button("load example"):
             emit(load_file(example_file))
 
+        labels = sorted(data['signals'].keys())
 
         if len(data['signals']) > 0:
             im.separator()
+            choices = [" - "] + labels
+            changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], choices)
+            if changed:
+                ui['plotted_channel'] = (labels[selected_ix], selected_ix)
 
-        for label, signal in data['signals'].items():
-            im.text_colored(label, 0.2, 0.8, 1)
+        def right_pad(s: str, limit: int) -> str:
+            n_spaces = max(0, limit-len(s))
+            return s + (' ' * n_spaces)
+
+        for label in labels:
+            im.text_colored(right_pad(label,5), 0.2, 0.8, 1)
             im.same_line()
-            im.text(str(signal))
-        
+            im.text(str(data['signals'][label]))
+
+
+    plot_window_flags = 0 if ui['plot_window_movable'] else im.WINDOW_NO_MOVE
+
+    with window(name="view (drag to scroll)", flags=plot_window_flags):
+        content_top_left, content_bottom_right = get_window_content_rect()
+        draw_list = im.get_window_draw_list()
+
+        if ui['plotted_channel'][0] != None:
+            # checkbox
+            # changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
+            # if changed:
+            #     ui['plot_window_movable'] = window_movable
+
+            # plot
+            label, _ = ui['plotted_channel']
+            signal_data = data['signals'][label].data
+            plot_data(draw_list, emit, ui['plot'], signal_data , 
+                      Rect(point_offset(content_top_left, im.Vec2(10, 35)),
+                           point_offset(content_bottom_right, im.Vec2(-10, -10))) )
+        else: # no channel label selected
+            im.text("Nothing here? Load a file and select a channel.")
+            gray = (0.8, 0.8, 0.8, 1)
+            add_rect(draw_list,
+                     point_offset(content_top_left,     im.Vec2(10, 30)),
+                     point_subtract_offset(content_bottom_right, im.Vec2(10, 10)),
+                     color=gray)
+
+
+    with window(name="debug"):
+        im.text("actions: "+str(frame_actions))
+        im.text("mouse:   "+str(get_mouse_position()))
+        im.text("drag-d:  "+str(im.get_mouse_drag_delta()))
+        im.text("drag:    "+str(im.is_mouse_dragging(button=0)))
+        im.text( str.join('\n', ("{}: {}".format(k, v) for k, v in ui['plot'].items())) )
+
 
 
 
@@ -234,9 +276,9 @@ def main():
         prev_frame_click_0_finished = click_0_finished
         return result
 
-    emit(load_file(example_file))
-    update_state_with_actions()
-    clear_actions()
+    # emit(load_file(example_file))
+    # update_state_with_actions()
+    # clear_actions()
 
     while not glfw.window_should_close(window):
 

@@ -40,6 +40,8 @@ class IO_(Generic[A]):
 class NDArray(Generic[A]):
 	pass
 
+NonEmpty = Iterable
+
 WidgetState = PMap_[str, Any]
 
 Id = int

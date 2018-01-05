@@ -18,6 +18,7 @@ class IM():
 		im.begin = begin
 		im.end = end
 		im.styles = kwargs.pop('styles', None)
+		im.flags  = kwargs.pop('flags', None)
 		im.args = kwargs
 
 
@@ -26,7 +27,10 @@ class IM():
 		if im.styles != None:
 			for name, value in im.styles.items():
 				imgui.push_style_var(name, value)
-		ret = im.begin(**im.args)
+		if im.flags != None:
+			ret = im.begin(**im.args, flags=im.flags)
+		else:
+			ret = im.begin(**im.args)
 		return ret
 
 	def __exit__(im, *args):

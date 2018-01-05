@@ -3,14 +3,65 @@ from types_util import *
 from functools import partial
 from itertools import islice
 import imgui as im
+from imgui import Vec2
+from collections import namedtuple
 
-def point_delta(a: im.Vec2, b: im.Vec2) -> im.Vec2:
-    return im.Vec2(b.x-a.x, b.y-a.y)
 
-def point_offset(a: im.Vec2, b: im.Vec2) -> im.Vec2:
-    return im.Vec2(b.x+a.x, b.y+a.y)
+Rect = namedtuple("Rect", ['top_left', 'bottom_right'])
 
-def rangeb(low: int, high: int, step: int = 1):
+def get_mouse_position() -> IO_[Vec2]:
+	io = im.get_io()
+	return io.mouse_pos
+
+def get_window_rect() -> IO_[Rect]:
+	""" To be used only in imgui code """
+	window_top_left = im.get_window_position()
+	width, height = im.get_window_size()
+	window_bottom_right = Vec2(window_top_left.x + width,
+								  window_top_left.y + height)
+	return Rect(window_top_left, window_bottom_right)
+
+
+def get_window_content_rect() -> IO_[Rect]:
+	TITLE_BAR_HEIGHT = 20
+	window_top_left = im.get_window_position()
+	content_top_left = Vec2(window_top_left.x,  window_top_left.y + TITLE_BAR_HEIGHT)
+	width, height = im.get_window_size()
+	window_bottom_right = Vec2(window_top_left.x + width,
+								  window_top_left.y + height)
+	return Rect(content_top_left, window_bottom_right)
+	
+
+def is_in_rect(point: Vec2, rect: Rect) -> bool:
+	top_left, bottom_right = rect
+	return \
+		top_left.x <= point.x <= bottom_right.x and \
+		top_left.y <= point.y <= bottom_right.y
+
+
+def add_rect(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IO_[None]:
+	""" Necessary because i haven't added the bindings for add_rect yet """
+	top_right   = Vec2(bottom_right.x, top_left.y)
+	bottom_left = Vec2(top_left.x, bottom_right.y)
+	# draw rect clockwise from top left
+	draw_list.add_line(top_left, top_right, color=color)
+	draw_list.add_line(top_right, bottom_right, color=color)
+	draw_list.add_line(bottom_right, bottom_left, color=color)
+	draw_list.add_line(bottom_left, top_left, color=color)
+
+
+def clamp(low, x, high):
+	return max(low, min(x, high))
+
+
+def point_subtract_offset(a: Vec2, offset: Vec2) -> Vec2:
+	return Vec2(a.x-offset.x, a.y-offset.y)
+
+def point_offset(a: Vec2, offset: Vec2) -> Vec2:
+	return Vec2(a.x+offset.x, a.y+offset.y)
+
+
+def rangeb(low: int, high: int, step: int = 1) -> Iterable[int]:
 	"""
 	Like range, but including the last element.
 	rangeb(n, k) == range(n, k+1)
@@ -22,7 +73,7 @@ def err_unsupported_action(action, state):
 
 
 
-def get(x, path: Iterable[Any]):
+def get_in(path: Iterable[Any], x: A) -> B:
 	"""
 	For exctracting elements out of nested data structures. 
 	d = {'xs':[3,5,7], 'ys':['foo', 'bar'] }
@@ -33,21 +84,61 @@ def get(x, path: Iterable[Any]):
 
 	get(d, []) == d
 	"""
-	raise Exception("Use pyrsistent.get_in !!!")
+	# raise Exception("Use pyrsistent.get_in !!!")
 	res = x
 	for index in path:
 		res = res[index]
 	return res
 
-def set_in(x, *path_n_values: List[ Tuple[Iterable[Any], Any] ]):
-	""" For setting values inside nested data structures. """
-	transformations = []
-	while path_n_values:
-		path, val, *path_n_values = path_n_values
-		transformations.extend([path, const(val)])
+# def set_in(x, *path_n_values: List[ Tuple[Iterable[Any], Any] ]):
+# 	""" For setting values inside nested data structures. """
+# 	transformations = []
+# 	while path_n_values:
+# 		path, val, *path_n_values = path_n_values
+# 		transformations.extend([path, const(val)])
 
-	return x.transform(*transformations)
+# 	return x.transform(*transformations)
 
+def set_in_tuple(path: NonEmpty[Any], val: B, tup: tuple) -> tuple:
+	assert is_namedtuple(tup), \
+			"{} is not a namedtuple, it's a {}".format(tup, type(tup))
+
+	if len(path) == 1:
+		ix = path[0]
+		return tup._replace(**{ix: val})
+	else: # path ~~ ix, *ixs
+		ix, *path2 = path
+		tup_in = getattr(tup, ix)
+		return tup._replace(**{ix: set_in_tuple(path2, val, tup_in)})
+
+
+def modify_in_tuple(path: NonEmpty[Any], fn: Fun[Anys, Any], tup: tuple) -> tuple:
+	assert is_namedtuple(tup), \
+			"{} is not a namedtuple, it's a {}".format(tup, type(tup))
+
+	if len(path) == 1:
+		ix = path[0]
+		a = getattr(tup, ix)
+		return tup._replace(**{ix: fn(a)})
+	else: # path ~~ ix, *ixs
+		ix, *path2 = path
+		tup_in = getattr(tup, ix)
+		return tup._replace(**{ix: modify_in_tuple(path2, fn, tup_in)})
+
+
+
+# def set_in(path: NonEmpty[Any], val: B, x: A) -> A:
+# 	if len(path) == 1:
+# 		ix = path[0]
+# 		return tup._replace(**{ix: val})
+# 	else: # path ~~ ix, *ixs
+# 		ix, *path2 = path
+# 		tup_in = getattr(tup, ix)
+# 		return tup._replace(**{ix: set_in_tuple(path2, val, tup_in)})
+
+
+def is_namedtuple(x: A) -> bool:
+	return isinstance(x, tuple) and '_replace' in dir(x)
 
 
 
