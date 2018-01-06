@@ -85,7 +85,7 @@ def clear_actions():
     frame_actions.clear()
 
 
-def update_state_with_actions():
+def update_state_with_actions() -> List[Effect]:
     global state
     global frame_actions
     global current_id
@@ -94,8 +94,11 @@ def update_state_with_actions():
     for act in frame_actions:
         state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
         all_effects.extend(effects)
+    return all_effects
 
-    for eff in all_effects:
+
+def execute_effects(effects: List[Effect]) -> IO_[None]:
+    for eff in effects:
         handle(data, eff)
 
 
@@ -121,51 +124,6 @@ def draw():
     #           counter_list: [id]       }
 
     assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
-
-
-    with window(name="counters"):
-        im.text("counters")
-        # with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
-        with child(name="add+delete",  width=40, height=100,
-                   styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
-
-            if im.button("+", width=30, height=30):
-                emit(add_counter())
-                
-            if im.button("-", width=30, height=30):
-                emit(remove_counter())
-
-            if im.button("clear", width=30, height=30):
-                emit(clear_counters())
-
-
-        im.same_line()
-        for id in state.counter_list:
-
-            with child(name="counter "+str(id), width=100, height=100, border=True,
-                       styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}) as is_counter_visible:
-                if is_counter_visible:
-                    im.text(str(state.counters[id].val))
-
-                    imgui.separator()
-
-                    changed, new_val = \
-                        im.input_text('value', value=str(state.counters[id].val),
-                                      buffer_length=1000,
-                                      flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
-                    if changed:
-                        emit( set_value(new_val, id) )
-
-
-                    if im.button("+"):
-                        emit( increment(1, id) )
-
-                    if im.button("-"):
-                        emit( decrement(1, id))
-
-            im.same_line()
-
-        im.new_line()
 
 
     im.show_metrics_window()
@@ -297,9 +255,9 @@ def main():
 
             draw() # defined above
 
-            update_state_with_actions()
+            effects = update_state_with_actions()
             clear_actions()
-
+            execute_effects(effects)
 
             gl.glClearColor(1., 1., 1., 1)
             gl.glClear(gl.GL_COLOR_BUFFER_BIT)

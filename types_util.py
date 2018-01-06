@@ -45,7 +45,7 @@ NonEmpty = Iterable
 WidgetState = PMap_[str, Any]
 
 Id = int
-Effect = Any
+Effect = PMap_[str, Any]
 
 Action = PMap_[str, Any]
 
