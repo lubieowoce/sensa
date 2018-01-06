@@ -9,6 +9,14 @@ from collections import namedtuple
 
 Rect = namedtuple("Rect", ['top_left', 'bottom_right'])
 
+def rect_width(rect: Rect) -> float:
+	top_left, bottom_right = rect
+	return bottom_right.x - top_left.x
+
+def rect_height(rect: Rect) -> float:
+	top_left, bottom_right = rect
+	return bottom_right.y - top_left.y
+
 def get_mouse_position() -> IO_[Vec2]:
 	io = im.get_io()
 	return io.mouse_pos
