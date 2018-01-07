@@ -69,7 +69,7 @@ def point_offset(a: Vec2, offset: Vec2) -> Vec2:
 	return Vec2(a.x+offset.x, a.y+offset.y)
 
 
-def rangeb(low: int, high: int, step: int = 1) -> Iterable[int]:
+def range_incl(low: int, high: int, step: int = 1) -> Iterable[int]:
 	"""
 	Like range, but including the last element.
 	rangeb(n, k) == range(n, k+1)

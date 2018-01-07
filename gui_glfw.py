@@ -11,7 +11,7 @@ from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
 from util import (
-	rangeb,
+	range_incl,
 	point_offset, point_subtract_offset,
 	Rect, rect_width,
 	add_rect, get_window_content_rect,
@@ -22,7 +22,8 @@ from imgui_widget import (window, group, child)
 from counter import *
 from counter_list import *
 
-from plot import plot_signal, TimeRange
+from plot import plot_signal
+from time_range import TimeRange
 
 from files import *
 from signal import Signal
@@ -143,6 +144,7 @@ def draw():
 			changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], texts)
 			if changed:
 				ui['plotted_channel'] = (choices[selected_ix], selected_ix)
+				ui['plot']['time_range'] = None
 
 		def right_pad(s: str, limit: int) -> str:
 			n_spaces = max(0, limit-len(s))
