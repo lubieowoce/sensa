@@ -11,7 +11,7 @@ from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
 from util import (
-	range_incl,
+	range_incl, 
 	point_offset, point_subtract_offset,
 	Rect, rect_width,
 	add_rect, get_window_content_rect,

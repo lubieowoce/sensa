@@ -4,7 +4,7 @@ from imgui import Vec2
 from types_util import *
 from util import (
 	point_offset, point_subtract_offset,
-	clamp,
+	clamp, limit_lower, limit_upper,
 	Rect, is_in_rect, rect_width, rect_height,
 	add_rect,
 	get_mouse_position,
@@ -47,6 +47,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	top_left, bottom_right = plot_draw_area
 	width_px  = int(rect_width(plot_draw_area))
+	debug_print(plot_state, 'width_px', width_px)
 	height_px = int(rect_height(plot_draw_area))
 
 	left_x = top_left.x
@@ -55,10 +56,14 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	top_y = top_left.y
 	bottom_y = bottom_right.y
 
+	max_t = (len(signal.data)-1) * signal.time_between_samples
+
 	# if a new plot channel was selected, pick a sensible default time range
 	# (hacky, should actually be done on plot channel selection)
 	if plot_state['time_range'] == None:
-		plot_state['time_range'] = TimeRange(0.0, width_px * signal.sampling_interval)
+		end_t = limit_upper(width_px * signal.sampling_interval, high=max_t)
+		# end_t = width_px * signal.sampling_interval
+		plot_state['time_range'] = TimeRange(0.0, end_t)
 
 
 	# MIDDLE LINE (AT DATA VALUE 0)
@@ -82,6 +87,8 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	time_range = plot_state['time_range']
 	start_t, end_t = time_range
+	assert 0 <= start_t < end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
+										   .format(start_t, end_t, 0, max_t)
 	time_between_samples = signal.sampling_interval
 
 
@@ -103,7 +110,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	n_samples_in_range  = last_ix+1 - first_ix
 	debug_print(plot_state, 'n_samples_in_range', n_samples_in_range)
-	n_points_in_plot = min(n_samples_in_range, width_px) # cap n_points_in_plot at the plot width
+	n_points_in_plot = limit_upper(n_samples_in_range, high=width_px) # cap n_points_in_plot at the plot width
 	debug_print(plot_state, 'n_points_in_plot', n_points_in_plot)
 
 
@@ -138,7 +145,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	# positive datapoints need to go "up" - in the negative y of the middle.
 	ys = offsets + middle_y # pixel heights of every point
 
-
+	debug_print(plot_state, 'data_part_len', len(ys))
 
 	# draw the actual plot
 
@@ -147,9 +154,18 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	# 1 sample (time_between_samples) sec  ->  x px
 	#
 	# x = (time_between_samples / time_range_length(time_range)) * width
-
 	px_per_1sample = (time_between_samples / time_range_length(time_range)) * width_px
+
+	if n_samples_in_range > n_points_in_plot:
+		assert n_points_in_plot == width_px
+		px_per_1point = 1
+	else: # n_samples_in_range <= n_points_in_plot
+		assert n_points_in_plot == n_samples_in_range
+		px_per_1point = px_per_1sample
+		
+	# assert math.isclose((len(ys)-1) * px_per_1point, width_px)
 	debug_print(plot_state, 'px_per_1sample', px_per_1sample)
+	debug_print(plot_state, 'length of plot', px_per_1point * (len(ys)-1))
 
 	px_per_1second = px_per_1sample * signal.samples_per_second
 	first_point_t = first_ix * time_between_samples
@@ -162,8 +178,8 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	for i in range(0, len(ys)-1): # the last one doesn't have a next point to draw a line to, hence the -1
 		# x1 = left_x + i*px_per_1point
 		# x2 = left_x + (i+1)*px_per_1point
-		x1 = first_point_x + i*px_per_1sample
-		x2 = first_point_x + (i+1)*px_per_1sample
+		x1 = first_point_x + i*px_per_1point
+		x2 = first_point_x + (i+1)*px_per_1point
 		point1 = Vec2(x1, ys[i])
 		point2 = Vec2(x2, ys[i+1])
 		draw_list.add_line(point1, point2, color=grue, thickness=2.0)
@@ -328,7 +344,7 @@ def n_indexes_from_range(first_ix: int, last_ix: int, n: int) -> List[int]:
 	for i in range_incl(1, n-2):
 		f_ix = first_ix + i*step
 		ix = round(f_ix)
-		limited_ix = min(ix, last_ix) # sanity check, should protect from floating point errors
+		limited_ix = limit_upper(ix, high=last_ix) # sanity check, should protect from floating point errors
 		indexes.append(limited_ix)
 	indexes.append(last_ix)
 	
@@ -341,102 +357,4 @@ def n_indexes_from_range(first_ix: int, last_ix: int, n: int) -> List[int]:
 
 
 
-def plot_data(draw_list, emit, plot_state: Dict[str, Any], data: NDArray[float], plot_draw_area: Rect) -> IO_[None]:
 
-	first_ix = plot_state['first_ix']
-
-	top_left, bottom_right = plot_draw_area
-	width_px  = bottom_right.x - top_left.x
-	height_px = bottom_right.y - top_left.y
-	assert width_px <= len(data) - first_ix, "not enough data points to plot 1 value / 1 pixel"
-	# assert width_px <= len(data[first_ix:])
-	n_points = int(width_px)
-
-	left_x = top_left.x
-	right_x = bottom_right.x
-
-
-	# middle line (at data value 0)
-	middle_y = top_left.y + height_px/2
-	mid_line_start = Vec2(left_x,  middle_y)
-	mid_line_end   = Vec2(right_x, middle_y)
-
-	white = (1.0, 1.0, 1.0, 1)
-	draw_list.add_line(mid_line_start, mid_line_end, color=white)
-
-
-
-	# plot
-	data_part = data[first_ix : first_ix+n_points] 
-	
-	# TODO:  # PERF-IMPROVEMENT: the following could be fused into one operation
-	normalized = data_part / amplitude(data_part)   # now all the points are in the <-1, 1> range
-	# normalized = data_part / 3200  # now all the points are in the <-1, 1> range
-	offsets = (- normalized) * height_px/2 # pixel offsets of every point.
-	# ^ note the negation. top left coordinates mean that
-	# positive datapoints need to go "up" - in the negative y of the middle.
-	ys = offsets + middle_y # pixel height_pxs of every point
-
-	grue = (0.2, 0.7, 0.8, 1)
-	for i in range(len(ys)-1): # the last one doesn't have a next point to draw a line to
-		x1 = left_x + i
-		x2 = left_x + i + 1
-		point1 = Vec2(x1, ys[i])
-		point2 = Vec2(x2, ys[i+1])
-		draw_list.add_line(point1, point2, color=grue, thickness=2.0)
-
-
-
-	# box around plot
-	gray = (0.8, 0.8, 0.8, 1)
-	add_rect(draw_list, top_left, bottom_right, gray)
-
-
-	# # mouse cursor
-	# mouse_pos = get_mouse_position()
-
-	# im.get_io().mouse_draw_cursor = True
-	# if is_in_rect(mouse_pos, plot_draw_area):
-	# 	im.set_mouse_cursor(im.MOUSE_CURSOR_MOVE)
-	# 	plot_state['hovered'] = True
-	# else:
-	# 	# im.set_mouse_cursor(im.MOUSE_CURSOR_ARROW)
-	# 	plot_state['hovered'] = False
-
-
-	# dragging
-	# crude dragging state machine
-	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
-	if not plot_state['dragging_plot'] \
-		and im.is_mouse_dragging(button=0) \
-		and is_in_rect(drag_origin, plot_draw_area):
-		# just begun dragging
-		plot_state['dragging_plot'] = True
-		plot_state['first_ix_before_drag'] = first_ix
-		
-	if plot_state['dragging_plot'] and not im.is_mouse_dragging(button=0):
-		# just ended dragging
-		plot_state['dragging_plot'] = False
-		plot_state['first_ix_before_drag'] = None
-
-
-	next_first_ix = first_ix  # if no drag or < > button input
-
-	if plot_state['dragging_plot']:
-		next_first_ix = plot_state['first_ix_before_drag'] - int(im.get_mouse_drag_delta().x)
-		#                                                  ^ mouse moves left -> first_ix moves right 
-
-
-	# buttons
-	move_amount = 5
-	if im.button("  <  "):
-		# next_first_ix = first_ix - move_amount
-		pass
-	im.same_line()
-	if im.button("  >  "):
-		pass
-		# next_first_ix = first_ix + move_amount
-
-	min_first_ix = 0
-	max_first_ix = len(data)-n_points-1
-	plot_state['first_ix'] = clamp(0, next_first_ix, max_first_ix)

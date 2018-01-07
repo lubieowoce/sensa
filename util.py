@@ -57,6 +57,11 @@ def add_rect(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IO_[None]:
 	draw_list.add_line(bottom_right, bottom_left, color=color)
 	draw_list.add_line(bottom_left, top_left, color=color)
 
+def limit_upper(x: A, high: A) -> A:
+	return min(x, high)
+	
+def limit_lower(x: A, low: A) -> A:
+	return max(low, x)
 
 def clamp(low, x, high):
 	return max(low, min(x, high))
