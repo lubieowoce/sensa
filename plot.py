@@ -31,9 +31,9 @@ import numpy as np
 def signal_plot_state(time_range: TimeRange) -> Dict[str, Any]:
 	return \
 		{
-		    'time_range'
-		    'is_dragged': False,
-		    'start_t_before_drag': None,
+			'time_range'
+			'is_dragged': False,
+			'start_t_before_drag': None,
 		}
 
 # 0.00    0.10    0.23    0.27    0.30    0.27  v
@@ -98,7 +98,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	last_ix  = math.floor(end_t / time_between_samples)      # last sample before end_t
 	#                                                       (so we can draw a line to it even though it's not visible yet)
 	assert 0 <= first_ix < last_ix <= len(signal.data)-1, "indexes <{},{}> out of bounds of data <{},{}>" \
-													       .format(first_ix, last_ix, 0, len(signal.data)-1)
+														   .format(first_ix, last_ix, 0, len(signal.data)-1)
 
 	debug_print(plot_state, 'first_ix', first_ix)
 	debug_print(plot_state, 'last_ix', last_ix)
@@ -139,6 +139,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	amplitude = max(abs(signal.physical_max), abs(signal.physical_min))
 	# TODO:  # PERF-IMPROVEMENT: the following could be fused into one operation
+	# NOTE: these are numpy's array operations, so `xs + 1` actually means `[x+1 for x in xs]`
 	normalized = data_part / amplitude   # now all the points are in the <-1, 1> range
 	offsets = (- normalized) * height_px/2 # pixel offsets from the mid line.
 	# ^ note the negation. top left coordinates mean that
@@ -149,15 +150,18 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	# draw the actual plot
 
-    # how much px per 1 sample?       
+	# how much px per 1 sample?       
 	# time_range_length(time_range)   sec  -> width px
 	# 1 sample (time_between_samples) sec  ->  x px
 	#
 	# x = (time_between_samples / time_range_length(time_range)) * width
+	#     ( the fraction of the time_range that 1 sample takes ) * width         
 	px_per_1sample = (time_between_samples / time_range_length(time_range)) * width_px
 
 	if n_samples_in_range > n_points_in_plot:
 		assert n_points_in_plot == width_px
+		assert len(ys) == width_px
+		# We have exactly width_px samples in ys, because we downsampled them earlier
 		px_per_1point = 1
 	else: # n_samples_in_range <= n_points_in_plot
 		assert n_points_in_plot == n_samples_in_range
@@ -217,11 +221,51 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	time_per_1px  = viewed_data_dur / width_px  # to know how much 1px of drag should move the time range
 
+	data_dur = len(signal.data) * time_between_samples
+	# zoom_factor = 1.5
+	min_time_range_length = 2*time_between_samples # so there's always at least one point visible
+	max_time_range_length = data_dur
+
+	zoom_factor_per_100px = 1.1
+	zoom_factor_per_1px   = 1 + ((zoom_factor_per_100px-1) / 100)
+
 	if plot_state['dragging_plot']:
-		next_time_range = time_range_subtract_offset(
-					          plot_state['time_range_before_drag'],
-					          im.get_mouse_drag_delta().x * time_per_1px )
-		# ^ mouse moves left -> start_t moves right 
+
+		mouse_drag_delta = im.get_mouse_drag_delta()
+		time_range_before_drag = plot_state['time_range_before_drag']
+		# ZOOMING
+
+		y_delta = (mouse_drag_delta.y)
+		if y_delta != 0:
+			factor = (math.exp(y_delta / 100))
+		else:
+			factor = None
+		# if y_delta < 0:     # mouse moved up
+		# 	factor = 1 / (abs(y_delta) * zoom_factor_per_1px)
+		# elif y_delta == 0:  # mouse didn't move vertically
+		# 	factor = None   
+		# else: # y_delta > 0 # mouse moved down
+		# 	factor = (abs(y_delta) * zoom_factor_per_1px)
+
+		if factor != None:
+			assert left_x <= drag_origin.x
+			viewed_data_dur_before_drag = time_range_before_drag.end_t - time_range_before_drag.start_t
+			time_per_1px_before_frag  = viewed_data_dur_before_drag / width_px
+
+			origin_x_offset = drag_origin.x - left_x
+			origin_t_offset = origin_x_offset * time_per_1px_before_frag
+			origin_t = time_range_before_drag.start_t + origin_t_offset
+
+			next_time_range = scale_at_point_limited(time_range_before_drag, factor, origin_t, 
+											min_len=min_time_range_length,
+											min_t=0., max_t=max_t)
+
+		# # SCROLLING 
+
+		# next_time_range = time_range_subtract_offset(
+		# 			          next_time_range,
+		# 			          mouse_drag_delta.x * time_per_1px )
+		# # ^ mouse moves left -> start_t moves right 
 
 		# draw line at mouse position:
 		mouse_x = get_mouse_position().x
@@ -231,31 +275,27 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 	# ZOOMING
 
-	data_dur = len(signal.data) * time_between_samples
 
 	#   buttons
-	did_zoom = False
-	zoom_factor = 1.5
-	min_time_range_length = 2*time_between_samples # so there's always at least one point visible
-	max_time_range_length = data_dur
+
 	# ^ important: zoom in narrows the time range,
 	#   zooming out widens it.
 
-	if im.button("  -  "):
-		did_zoom = True
-		next_time_range = scale_by_limited(zoom_factor, time_range,
-										   min_len=min_time_range_length,
-										   max_len=max_time_range_length)
-	im.same_line()
-	if im.button("  +  "):
-		did_zoom = True
-		next_time_range = scale_by_limited(1/zoom_factor, time_range,
-										   min_len=min_time_range_length,
-										   max_len=max_time_range_length)
+	# if im.button("  -  "):
+	# 	did_zoom = True
+	# 	next_time_range = scale_by_limited(zoom_factor, time_range,
+	# 									   min_len=min_time_range_length,
+	# 									   max_len=max_time_range_length)
+	# im.same_line()
+	# if im.button("  +  "):
+	# 	did_zoom = True
+	# 	next_time_range = scale_by_limited(1/zoom_factor, time_range,
+	# 									   min_len=min_time_range_length,
+	# 									   max_len=max_time_range_length)
 
-	if did_zoom:
-		mid_x = left_x + (right_x - left_x)/2
-		draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)
+	# if did_zoom_____:
+	# 	mid_x = left_x + (right_x - left_x)/2
+	# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)
 
 
 	# UPDATE THE TIME RANGE based on input
@@ -266,6 +306,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 	# END
+
 
 
 
@@ -317,12 +358,7 @@ def crude_downsample(data: NDArray[float], n_samples: int) -> NDArray[float]:
 
 
 
-def frange(start, end, step: float = 1) -> Iterable[float]:
-	""" Like range, but supports float parameters"""
-	n = start
-	while n < end:
-		yield n
-		n += step
+
 
 # 0  1  2  3  4  5  6  7  8  9  
 # 0                          9
@@ -352,9 +388,34 @@ def n_indexes_from_range(first_ix: int, last_ix: int, n: int) -> List[int]:
 							   .format(n, len(indexes))
 	assert max(indexes) == last_ix, "max ix should be {last_ix}, is {max_ix} at position {imax} (f:{first_ix}, s:{step}, l:{last_ix})" \
 									 .format(last_ix=last_ix, max_ix=max(indexes), imax=indexes.index(max(indexes)),
-									 	     step=step, first_ix=first_ix)
+											 step=step, first_ix=first_ix)
 	return indexes
 
+
+
+
+
+
+def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> (int, int):
+	assert signal.sampling_interval >= 0, "sampling_interval ({}) must be >= 0.0" \
+										   .format(sampling_interval)
+
+	time_between_samples = signal.sampling_interval
+	start_t, end_t = time_range
+	first_f_ix, last_f_ix = start_t / time_between_samples, end_t / time_between_samples
+	first_ix = math.ceil(first_f_ix)
+	last_ix  = math.floor(last_f_ix)
+	# last_data_ix = len(signal.data) - 1
+	# max_t = last_ix * time_between_samples
+
+	# TODO: consider floating point inaccuracies.
+	#       I'm guessing that currently it might not be possible 
+	#       to hit 0, last_data_ix with a time inside the signal's range
+	#       because the inaccurate f_ixs get rounded.
+	#       (rounding them like this is desirable for non-edge points because 
+	#        it guarantees that the ix will be inside the time range)
+
+	return math.floor(f_ix)
 
 
 
