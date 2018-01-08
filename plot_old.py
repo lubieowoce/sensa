@@ -36,10 +36,6 @@ def signal_plot_state(time_range: TimeRange) -> Dict[str, Any]:
 			'start_t_before_drag': None,
 		}
 
-
-white = (1.0, 1.0, 1.0, 1)
-
-
 # 0.00    0.10    0.23    0.27    0.30    0.27  v
 # |-------|-------|-------|-------|-------|
 # 0       200     400     600     800     1000  ms 
@@ -60,149 +56,14 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	top_y = top_left.y
 	bottom_y = bottom_right.y
 
-	time_between_samples = signal.sampling_interval
-	max_t = (len(signal.data)-1) * time_between_samples
+	max_t = (len(signal.data)-1) * signal.time_between_samples
 
 	# if a new plot channel was selected, pick a sensible default time range
 	# (hacky, should actually be done on plot channel selection)
 	if plot_state['time_range'] == None:
-		end_t = limit_upper(  width_px * signal.sampling_interval  , high=max_t)
+		end_t = limit_upper(width_px * signal.sampling_interval, high=max_t)
+		# end_t = width_px * signal.sampling_interval
 		plot_state['time_range'] = TimeRange(0.0, end_t)
-
-
-	# sanity check before handling input
-	# (underscores are so that these won't collide with the ones after handling inputs)
-	__time_range = plot_state['time_range']
-	__start_t, __end_t = __time_range
-	assert 0. <= __start_t < __end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
-										        .format(__start_t, __end_t, 0., max_t)
-
-
-
-
-	# HANDLING USER INPUT (long)
-
-	# crude dragging state machine
-	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
-
-	if not plot_state['dragging_plot'] \
-		and im.is_mouse_dragging(button=0) \
-		and is_in_rect(drag_origin, plot_draw_area):
-		# just begun dragging
-		plot_state['dragging_plot'] = True
-		plot_state['time_range_before_drag'] = plot_state['time_range']
-		
-	if plot_state['dragging_plot'] and not im.is_mouse_dragging(button=0):
-		# just ended dragging
-		plot_state['dragging_plot'] = False
-		plot_state['time_range_before_drag'] = None
-	# end dragging state machine
-
-
-
-	# code that might change the time range starts here
-
-	updated_time_range = plot_state['time_range']  # if no drag or < > button input
-
-
-	# DRAGGING
-
-
-	if plot_state['dragging_plot']:
-
-		time_range_before_drag = plot_state['time_range_before_drag']
-		mouse_drag_delta = im.get_mouse_drag_delta()
-
-		updated_time_range = time_range_before_drag
-
-
-		# ZOOMING
-
-		# zoom_factor = 1.5
-		min_time_range_length = 2*time_between_samples # so there's always at least one point visible
-		max_time_range_length = max_t
-
-		zoom_factor_per_100px = 1.1
-		zoom_factor_per_1px   = 1 + ((zoom_factor_per_100px-1) / 100)
-
-		x_delta = mouse_drag_delta.x
-		y_delta = mouse_drag_delta.y
-
-		do_zoom   = True
-		do_scroll = True
-
-
-		if do_zoom and y_delta != 0.:
-			factor = (math.exp(-y_delta / 100))
-			# 
-			assert left_x <= drag_origin.x
-			viewed_data_dur_before_drag = time_range_before_drag.end_t - time_range_before_drag.start_t
-			time_per_1px_before_drag  = viewed_data_dur_before_drag / width_px
-
-			origin_x_offset = drag_origin.x - left_x
-			origin_t_offset = origin_x_offset * time_per_1px_before_drag
-			origin_t = time_range_before_drag.start_t + origin_t_offset
-
-			updated_time_range = scale_at_point_limited(time_range_before_drag, factor, origin_t, 
-											min_len=min_time_range_length,
-											min_t=0., max_t=max_t)
-
-		# SCROLLING
-		viewed_data_dur = updated_time_range.end_t - updated_time_range.start_t
-		time_per_1px  = viewed_data_dur / width_px  # to know how much 1px of drag should move the time range
-
-		if do_scroll and x_delta != 0.:
-			updated_time_range = time_range_subtract_offset(
-						           		updated_time_range,
-						          		x_delta * time_per_1px )
-			# ^ mouse moves left -> start_t moves right, so we subtract
-
-
-		updated_time_range = clamp_time_range(0., updated_time_range, max_t)
-
-		# draw line at mouse position:
-		mouse_x = get_mouse_position().x
-		draw_list.add_line(Vec2(mouse_x, bottom_y), Vec2(mouse_x, top_y), color=white)
-
-
-
-	# ZOOMING
-
-
-	#   buttons
-
-	# ^ important: zoom in narrows the time range,
-	#   zooming out widens it.
-
-	# if im.button("  -  "):
-	# 	did_zoom = True
-	# 	updated_time_range = scale_by_limited(zoom_factor, time_range,
-	# 									   min_len=min_time_range_length,
-	# 									   max_len=max_time_range_length)
-	# im.same_line()
-	# if im.button("  +  "):
-	# 	did_zoom = True
-	# 	updated_time_range = scale_by_limited(1/zoom_factor, time_range,
-	# 									   min_len=min_time_range_length,
-	# 									   max_len=max_time_range_length)
-
-	# if did_zoom_____:
-	# 	mid_x = left_x + (right_x - left_x)/2
-	# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)
-
-
-	# UPDATE THE TIME RANGE based on input
-	time_range = plot_state['time_range'] = updated_time_range
-
-
-	start_t, end_t = time_range
-	assert 0. <= start_t < end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
-										    .format(start_t, end_t, 0., max_t)
-
-	viewed_data_dur = end_t - start_t
-	debug_print(plot_state, 'viewed_data_dur', viewed_data_dur)
-
-
 
 
 	# MIDDLE LINE (AT DATA VALUE 0)
@@ -210,6 +71,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	mid_line_start = Vec2(left_x,  middle_y)
 	mid_line_end   = Vec2(right_x, middle_y)
 
+	white = (1.0, 1.0, 1.0, 1)
 	draw_list.add_line(mid_line_start, mid_line_end, color=white)
 
 
@@ -219,9 +81,15 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 
+
 	# THE SIGNAL PLOT (long)
 
 
+	time_range = plot_state['time_range']
+	start_t, end_t = time_range
+	assert 0 <= start_t < end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
+										   .format(start_t, end_t, 0, max_t)
+	time_between_samples = signal.sampling_interval
 
 
 	# get the indexes of the signal data to plot
@@ -236,6 +104,9 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	debug_print(plot_state, 'last_ix', last_ix)
 
 	# get some plot properties
+
+	viewed_data_dur = end_t - start_t
+	debug_print(plot_state, 'viewed_data_dur', viewed_data_dur)
 
 	n_samples_in_range  = last_ix+1 - first_ix
 	debug_print(plot_state, 'n_samples_in_range', n_samples_in_range)
@@ -322,6 +193,119 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 
+	# HANDLING USER INPUT (long too)
+
+	# crude dragging state machine
+	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
+
+	if not plot_state['dragging_plot'] \
+		and im.is_mouse_dragging(button=0) \
+		and is_in_rect(drag_origin, plot_draw_area):
+		# just begun dragging
+		plot_state['dragging_plot'] = True
+		plot_state['time_range_before_drag'] = time_range
+		
+	if plot_state['dragging_plot'] and not im.is_mouse_dragging(button=0):
+		# just ended dragging
+		plot_state['dragging_plot'] = False
+		plot_state['time_range_before_drag'] = None
+	# end dragging state machine
+
+
+
+	# code that might change the time range starts here
+
+	next_time_range = time_range  # if no drag or < > button input
+
+
+	# DRAGGING
+
+	time_per_1px  = viewed_data_dur / width_px  # to know how much 1px of drag should move the time range
+
+
+	if plot_state['dragging_plot']:
+
+		time_range_before_drag = plot_state['time_range_before_drag']
+		mouse_drag_delta = im.get_mouse_drag_delta()
+
+		time_range_to_modify = time_range_before_drag
+
+
+		# ZOOMING
+
+		# zoom_factor = 1.5
+		min_time_range_length = 2*time_between_samples # so there's always at least one point visible
+		max_time_range_length = max_t
+
+		zoom_factor_per_100px = 1.1
+		zoom_factor_per_1px   = 1 + ((zoom_factor_per_100px-1) / 100)
+
+		x_delta = mouse_drag_delta.x
+		y_delta = mouse_drag_delta.y
+
+		do_zoom   = True
+		do_scroll = True
+
+
+		if do_zoom and y_delta != 0:
+			factor = (math.exp(-y_delta / 100))
+			# 
+			assert left_x <= drag_origin.x
+			viewed_data_dur_before_drag = time_range_before_drag.end_t - time_range_before_drag.start_t
+			time_per_1px_before_frag  = viewed_data_dur_before_drag / width_px
+
+			origin_x_offset = drag_origin.x - left_x
+			origin_t_offset = origin_x_offset * time_per_1px_before_frag
+			origin_t = time_range_before_drag.start_t + origin_t_offset
+
+			time_range_to_modify = scale_at_point_limited(time_range_before_drag, factor, origin_t, 
+											min_len=min_time_range_length,
+											min_t=0., max_t=max_t)
+
+		# SCROLLING 
+
+		if do_scroll and x_delta != 0:
+			time_range_to_modify = time_range_subtract_offset(
+						           		time_range_to_modify,
+						          		x_delta * time_per_1px )
+			# ^ mouse moves left -> start_t moves right, so we subtract
+
+		next_time_range = time_range_to_modify
+
+		# draw line at mouse position:
+		mouse_x = get_mouse_position().x
+		draw_list.add_line(Vec2(mouse_x, bottom_y), Vec2(mouse_x, top_y), color=white)
+
+
+
+	# ZOOMING
+
+
+	#   buttons
+
+	# ^ important: zoom in narrows the time range,
+	#   zooming out widens it.
+
+	# if im.button("  -  "):
+	# 	did_zoom = True
+	# 	next_time_range = scale_by_limited(zoom_factor, time_range,
+	# 									   min_len=min_time_range_length,
+	# 									   max_len=max_time_range_length)
+	# im.same_line()
+	# if im.button("  +  "):
+	# 	did_zoom = True
+	# 	next_time_range = scale_by_limited(1/zoom_factor, time_range,
+	# 									   min_len=min_time_range_length,
+	# 									   max_len=max_time_range_length)
+
+	# if did_zoom_____:
+	# 	mid_x = left_x + (right_x - left_x)/2
+	# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)
+
+
+	# UPDATE THE TIME RANGE based on input
+	next_time_range = clamp_time_range(0, next_time_range, max_t)
+	plot_state['time_range'] = next_time_range 
 
 
 	# END
