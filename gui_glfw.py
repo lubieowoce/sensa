@@ -29,9 +29,8 @@ from counter import *
 from counter_list import *
 
 from plot import (
-	signal_plot, update_signal_plot,
-	initial_signal_plot_state,
-	set_plot_empty, select_plot_signal,
+	initial_signal_plot_state, update_signal_plot,
+	signal_plot_window, 
 )
 
 from files import *
@@ -166,33 +165,9 @@ def draw():
 			im.same_line()
 			im.text(str(data['signals'][label]))
 
-
-	plot_window_flags = 0 if ui['plot_window_movable'] else im.WINDOW_NO_MOVE
-
-	with window(name="view (drag to scroll)", flags=plot_window_flags):
-		content_top_left, content_bottom_right = get_window_content_rect()
-		draw_list = im.get_window_draw_list()
-
-		# checkbox
-		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
-		# if changed:
-		#     ui['plot_window_movable'] = window_movable
-
-		# plot
-		if ui['plotted_channel_changed']:
-			o_signal_id, _ = ui['plotted_channel']
-			if o_signal_id == None:
-				set_plot_empty(ui['plot'])
-			else:
-				signal_id = o_signal_id
-				select_plot_signal(ui['plot'], signal_id)
-
-		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
-						 point_offset(content_bottom_right, im.Vec2(-10, -10)))
-
-		update_signal_plot(ui['plot'], data['signals'], plot_draw_area)
-
-		signal_plot(draw_list, emit, ui['plot'], data['signals'], plot_draw_area)
+	# signal plot
+	ui['plot_rect'] = signal_plot_window(ui['plot'], data['signals'], ui, emit)
+	update_signal_plot(ui['plot'], data['signals'], ui['plot_rect'], ui)
 
 
 	# debug_log_dict('ui', ui)

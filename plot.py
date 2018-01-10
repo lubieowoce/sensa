@@ -3,6 +3,8 @@ from imgui import Vec2
 
 from types_util import *
 
+from imgui_widget import window
+
 from debug_util import (
 	debug_log, debug_log_time, debug_log_dict,
 	Range
@@ -11,9 +13,11 @@ from debug_util import (
 from util import (
 	point_offset, point_subtract_offset,
 	clamp, limit_lower, limit_upper,
+
 	Rect, is_in_rect, rect_width, rect_height,
 	add_rect_coords, add_rect,
-	get_mouse_position,
+
+	get_mouse_position, get_window_content_rect,
 	range_incl,
 	one_is_true_of,
 )
@@ -104,26 +108,56 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 # 0       1       2       3       4       5     i
 
 
-# draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect
-# plot_state: Dict[str, Any], data: Dict[str, Signal], plot_draw_area: Rect
-def signal_plot(draw_list, emit, plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect) -> IMGui[None]:
+
+
+def signal_plot_window(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui: Dict[str, Any], emit) -> IMGui[Rect]:
+
+	PLOT_WINDOW_FLAGS = 0 if ui['plot_window_movable'] else im.WINDOW_NO_MOVE
+
+	with window(name="view (drag to scroll)", flags=PLOT_WINDOW_FLAGS):
+		content_top_left, content_bottom_right = get_window_content_rect()
+		draw_list = im.get_window_draw_list()
+
+		# checkbox
+		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
+		# if changed:
+		#     ui['plot_window_movable'] = window_movable
+
+		# plot
+		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
+						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
+
+
+		signal_plot(ui['plot'], signal_data, plot_draw_area, draw_list, emit)
+
+	return plot_draw_area
+
+
+def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
 	assert_is_valid_plot(plot_state)
 	debug_log('plot_state', plot_state_type(plot_state))
 
 	if is_empty_plot(plot_state):
-		show_empty_plot(draw_list, emit, plot_state, plot_draw_area)
+		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
 	elif is_freshly_selected_plot(plot_state):
-		show_empty_plot(draw_list, emit, plot_state, plot_draw_area)
+		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
 	else: # is_full_plot(plot_state)
 		signal_id = plot_state["signal_id"]
 		signal = signal_data[signal_id]
 
-		show_full_plot(draw_list, emit, plot_state, signal, plot_draw_area)
+		show_full_plot(plot_state, signal, plot_draw_area, draw_list, emit)
 
 
-def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect) -> IO_[None]:
+def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui: Dict[str, Any]) -> IO_[None]:
 	assert_is_valid_plot(plot_state)
 
+	if ui['plotted_channel_changed']:
+		o_signal_id, _ = ui['plotted_channel']
+		if o_signal_id == None:
+			set_plot_empty(ui['plot'])
+		else:
+			signal_id = o_signal_id
+			select_plot_signal(ui['plot'], signal_id)
 
 	if is_empty_plot(plot_state):
 		return
@@ -249,7 +283,7 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 
-def show_full_plot(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect) -> IMGui[None]:
+def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
 	assert is_full_plot(plot_state)
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
@@ -420,7 +454,7 @@ def show_full_plot(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, 
 	# END
 
 
-def show_empty_plot(draw_list, emit, plot_state: Dict[str, Any], plot_draw_area: Rect) -> IMGui[None]:
+def show_empty_plot(plot_state: Dict[str, Any], plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
 	# assert is_empty_plot(plot_state)
 	# BOX AROUND PLOT
 	gray = (0.8, 0.8, 0.8, 1)
