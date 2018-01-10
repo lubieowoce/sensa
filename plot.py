@@ -2,6 +2,12 @@ import imgui as im
 from imgui import Vec2
 
 from types_util import *
+
+from debug_util import (
+	debug_log, debug_log_time, debug_log_dict,
+	Range
+)
+
 from util import (
 	point_offset, point_subtract_offset,
 	clamp, limit_lower, limit_upper,
@@ -39,6 +45,10 @@ def signal_plot_state(time_range: TimeRange) -> Dict[str, Any]:
 
 white = (1.0, 1.0, 1.0, 1)
 
+PLOT_SIGNAL_CALL_START,  PLOT_SIGNAL_CALL_END = Range("plot_signal_call")
+WAVE_DRAW_START,         WAVE_DRAW_END        = Range("wave_draw")
+DATA_GET_START,          DATA_GET_END         = Range("data_get")
+
 
 # 0.00    0.10    0.23    0.27    0.30    0.27  v
 # |-------|-------|-------|-------|-------|
@@ -47,11 +57,11 @@ white = (1.0, 1.0, 1.0, 1)
 
 def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect) -> IO_[None]:
 
-
+	debug_log_time(PLOT_SIGNAL_CALL_START)
 
 	top_left, bottom_right = plot_draw_area
 	width_px  = int(rect_width(plot_draw_area))
-	debug_print(plot_state, 'width_px', width_px)
+	debug_log('width_px', width_px)
 	height_px = int(rect_height(plot_draw_area))
 
 	left_x = top_left.x
@@ -166,41 +176,24 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 
-	# ZOOMING
-
-
-	#   buttons
-
-	# ^ important: zoom in narrows the time range,
-	#   zooming out widens it.
-
-	# if im.button("  -  "):
-	# 	did_zoom = True
-	# 	updated_time_range = scale_by_limited(zoom_factor, time_range,
-	# 									   min_len=min_time_range_length,
-	# 									   max_len=max_time_range_length)
-	# im.same_line()
-	# if im.button("  +  "):
-	# 	did_zoom = True
-	# 	updated_time_range = scale_by_limited(1/zoom_factor, time_range,
-	# 									   min_len=min_time_range_length,
-	# 									   max_len=max_time_range_length)
-
-	# if did_zoom_____:
-	# 	mid_x = left_x + (right_x - left_x)/2
-	# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)
-
 
 	# UPDATE THE TIME RANGE based on input
 	time_range = plot_state['time_range'] = updated_time_range
 
 
+	# END OF HANDLING USER INPUT
+
+
+
+	debug_log_dict("plot", plot_state)
 	start_t, end_t = time_range
 	assert 0. <= start_t < end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
 										    .format(start_t, end_t, 0., max_t)
 
 	viewed_data_dur = end_t - start_t
-	debug_print(plot_state, 'viewed_data_dur', viewed_data_dur)
+	debug_log('viewed_data_dur', viewed_data_dur)
+
+
 
 
 
@@ -219,9 +212,8 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 
+
 	# THE SIGNAL PLOT (long)
-
-
 
 
 	# get the indexes of the signal data to plot
@@ -232,15 +224,15 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	assert 0 <= first_ix < last_ix <= len(signal.data)-1, "indexes <{},{}> out of bounds of data <{},{}>" \
 														   .format(first_ix, last_ix, 0, len(signal.data)-1)
 
-	debug_print(plot_state, 'first_ix', first_ix)
-	debug_print(plot_state, 'last_ix', last_ix)
+	debug_log('first_ix', first_ix)
+	debug_log('last_ix', last_ix)
 
 	# get some plot properties
 
 	n_samples_in_range  = last_ix+1 - first_ix
-	debug_print(plot_state, 'n_samples_in_range', n_samples_in_range)
+	debug_log('n_samples_in_range', n_samples_in_range)
 	n_points_in_plot = limit_upper(n_samples_in_range, high=width_px) # cap n_points_in_plot at the plot width
-	debug_print(plot_state, 'n_points_in_plot', n_points_in_plot)
+	debug_log('n_points_in_plot', n_points_in_plot)
 
 
 
@@ -253,6 +245,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	# 	# ixs = n_indexes_from_range(first_ix, last_ix, n_points_in_plot)
 	# 	# data_part = signal.data[ixs]
 	# 	data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
+	debug_log_time(DATA_GET_START)
 
 	if n_samples_in_range > n_points_in_plot:
 		assert n_points_in_plot == width_px
@@ -260,7 +253,6 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	else: # n_samples_in_range <= n_points_in_plot
 		assert n_points_in_plot == n_samples_in_range
 		data_part = signal.data[first_ix : last_ix+1] 
-
 
 	assert n_points_in_plot == len(data_part)
 
@@ -275,7 +267,8 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 	# positive datapoints need to go "up" - in the negative y of the middle.
 	ys = offsets + middle_y # pixel heights of every point
 
-	debug_print(plot_state, 'data_part_len', len(ys))
+	debug_log_time(DATA_GET_END)
+	debug_log('data_part_len', len(ys))
 
 	# draw the actual plot
 
@@ -297,8 +290,8 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 		px_per_1point = px_per_1sample
 		
 	# assert math.isclose((len(ys)-1) * px_per_1point, width_px)
-	debug_print(plot_state, 'px_per_1sample', px_per_1sample)
-	debug_print(plot_state, 'length of plot', px_per_1point * (len(ys)-1))
+	debug_log('px_per_1sample', px_per_1sample)
+	debug_log('length of plot', px_per_1point * (len(ys)-1))
 
 	px_per_1second = px_per_1sample * signal.samples_per_second
 	first_point_t = first_ix * time_between_samples
@@ -308,6 +301,7 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 	grue = (0.2, 0.7, 0.8, 1)
+	debug_log_time(WAVE_DRAW_START)
 	for i in range(0, len(ys)-1): # the last one doesn't have a next point to draw a line to, hence the -1
 		# x1 = left_x + i*px_per_1point
 		# x2 = left_x + (i+1)*px_per_1point
@@ -317,10 +311,13 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 		point2 = Vec2(x2, ys[i+1])
 		draw_list.add_line(point1, point2, color=grue, thickness=2.0)
 
+	debug_log_time(WAVE_DRAW_END)
+
 
 	# END OF THE SIGNAL PLOT
 
 
+	debug_log_time(PLOT_SIGNAL_CALL_END)
 
 
 
@@ -328,21 +325,6 @@ def plot_signal(draw_list, emit, plot_state: Dict[str, Any], signal: Signal, plo
 
 
 
-
-
-# # setting different mouse cursor if hovering over plot
-# mouse_pos = get_mouse_position()
-
-# im.get_io().mouse_draw_cursor = True
-# if is_in_rect(mouse_pos, plot_draw_area):
-# 	im.set_mouse_cursor(im.MOUSE_CURSOR_MOVE)
-# 	plot_state['hovered'] = True
-# else:
-# 	# im.set_mouse_cursor(im.MOUSE_CURSOR_ARROW)
-# 	plot_state['hovered'] = False
-
-def debug_print(debug_dict: Dict[str, Any], key: str, val) -> IO_[None]:
-	debug_dict[key] = val
 
 
 
@@ -438,3 +420,43 @@ def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> (int, 
 
 
 
+
+# some unused code stashed for maybe-later:
+
+
+# # setting different mouse cursor if hovering over plot
+# mouse_pos = get_mouse_position()
+
+# im.get_io().mouse_draw_cursor = True
+# if is_in_rect(mouse_pos, plot_draw_area):
+# 	im.set_mouse_cursor(im.MOUSE_CURSOR_MOVE)
+# 	plot_state['hovered'] = True
+# else:
+# 	# im.set_mouse_cursor(im.MOUSE_CURSOR_ARROW)
+# 	plot_state['hovered'] = False
+
+
+
+# ZOOMING BUTTONS
+
+
+#   buttons
+
+# ^ important: zoom in narrows the time range,
+#   zooming out widens it.
+
+# if im.button("  -  "):
+# 	did_zoom = True
+# 	updated_time_range = scale_by_limited(zoom_factor, time_range,
+# 									   min_len=min_time_range_length,
+# 									   max_len=max_time_range_length)
+# im.same_line()
+# if im.button("  +  "):
+# 	did_zoom = True
+# 	updated_time_range = scale_by_limited(1/zoom_factor, time_range,
+# 									   min_len=min_time_range_length,
+# 									   max_len=max_time_range_length)
+
+# if did_zoom_____:
+# 	mid_x = left_x + (right_x - left_x)/2
+# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)

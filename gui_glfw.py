@@ -7,15 +7,21 @@ import imgui as im
 from imgui.integrations.glfw import GlfwRenderer
 
 from time import sleep
+from collections import OrderedDict
 from pyrsistent import (m, pmap, v, pvector)
 
 from types_util import *
+from debug_util import (
+	debug_window,
+	debug_log,
+	debug_frame_ended,
+)
+
 from util import (
-	range_incl, 
+	range_incl, limit_lower,
 	point_offset, point_subtract_offset,
 	Rect, rect_width,
 	add_rect, get_window_content_rect,
-	get_mouse_position
 )
 from id_eff import id_and_effects, run_id_eff, get_ids
 from imgui_widget import (window, group, child)
@@ -115,6 +121,10 @@ ui = {
 	'plot_window_movable': False,
 }
 
+
+
+
+
 def draw():
 	"""
 	imgui.new_frame() is called right before `draw` in main.
@@ -185,17 +195,8 @@ def draw():
 					 color=gray)
 
 
-	with window(name="debug"):
-		im.text("actions: "+str(frame_actions))
-		im.text("mouse:   "+str(get_mouse_position()))
-		im.text("drag-d:  "+str(im.get_mouse_drag_delta()))
-		im.text("drag:    "+str(im.is_mouse_dragging(button=0)))
-		im.text( str.join('\n', ("{}: {}".format(k, v) for k, v in ui['plot'].items())) )
-
-
-
-
-
+	debug_frame_ended()
+	debug_window()
 
 
 
@@ -248,6 +249,7 @@ def main():
 	while not glfw.window_should_close(window):
 
 		frame_start = glfw.get_time() # seconds
+		debug_log("frame_start_ms", frame_start*1000) # miliseconds
 
 		glfw.poll_events()
 		impl.process_inputs()

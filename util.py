@@ -1,10 +1,17 @@
 from types_util import *
 
+
+import builtins
 from functools import partial
 from itertools import islice
+from collections import namedtuple
+
 import imgui as im
 from imgui import Vec2
-from collections import namedtuple
+
+import flags
+
+
 
 
 Rect = namedtuple("Rect", ['top_left', 'bottom_right'])
@@ -57,9 +64,184 @@ def add_rect(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IO_[None]:
 	draw_list.add_line(bottom_right, bottom_left, color=color)
 	draw_list.add_line(bottom_left, top_left, color=color)
 
+
+class Either(Generic[A, B]):
+	pass
+
+class Left(Either):
+	def __init__(left, val): left.val = val
+	@property
+	def is_left(left): return True
+	@property
+	def is_right(left): return False
+	@property
+	def err_val(left): return left.val
+	@property
+	def res_val(left): raise Exception("Tried calling res_val on " + str(left))
+	def __str__(left): return "Left({})".format(left.val)
+
+class Right(Either):
+	def __init__(right, val): right.val = val
+	@property
+	def is_left(right): return False
+	@property
+	def is_right(right): return True
+	@property
+	def err_val(left): raise Exception("Tried calling err_val on " + str(right))
+	@property
+	def res_val(right): return right.val
+	def __str__(right): return "Right({})".format(right.val)
+
+def either(e: Either[A, B], l_fn: Fun[[A], R], r_fn: Fun[[A], R]) -> R:
+	return  l_fn(e.val) if e.is_left else r_fn(e.val)
+
+
+class Maybe(Generic[A]):
+	pass
+
+class Nothing(Maybe):
+	def __init__(nothing): pass
+	@property
+	def is_nothing(nothing): return True
+	@property
+	def is_just(nothing):   return False
+	@property
+	def val(nothing): raise Exception("Tried to get value of Nothing")
+	def get_val(nothing): return None
+
+class Just(Maybe):
+	def __init__(just, val): just.val = val
+	@property
+	def is_nothing(just): return False
+	@property
+	def is_just(just):    return True
+	def get_val(just): return just.val
+
+
+
+
+def dict_to_function(dictionary: Dict[K, A]) -> Fun[[K], A]:
+	return lambda k: dictionary[k]
+
+
+
+def is_sequence_uniform(seq: Sequence[Any]) -> bool:
+	if len(seq) == 0:
+		return True
+	else: # list has values
+		return sequence_type(sequence).is_right
+
+
+
+def sequence_type(seq: Sequence[Any]) -> Either[int, type]:
+	"""
+	Returns either Right(the type of the sequence's values)
+			or     Left(index of first badly typed value)
+			or	   Left(0) if the sequence is empty
+	"""
+	if len(seq) == 0:
+		return Left(0)
+	else:
+		first_value_type = type(seq[0])
+		is_nth_value_right_type = [ type(value) == first_value_type  for value in seq ]
+		
+		o_value_of_different_type_ix = optional_index(is_nth_value_right_type, False)
+		if o_value_of_different_type_ix == None:
+			return Right(first_value_type)
+		else: # found a value of different type
+			return Left(o_value_of_different_type_ix)
+
+
+def uniform_sequence_type(seq: Sequence[A]) -> type:
+	assert len(seq) > 0, "Sequence is empty, cannot tell what type its values are"
+	assert_sequence_is_uniform(seq)
+
+	return type(seq[0])
+
+
+def assert_sequence_is_uniform(seq: Sequence[A]):
+	if not flags.DEBUG:
+		return
+
+	if len(seq) == 0:
+		return
+	else: # seq has values
+		e_type_or_ix = sequence_type(seq)
+		assert res.is_right, \
+			"Sequence is not of uniform type. First value ({v1}) is of type {t1}, but value at index {ix} ({v2}) is of type {t2}: {}"\
+			 .format(v1=seq[0], t1=type(seq[0]), ix=e_type_or_ix.err_val, v2=seq[e_type_or_ix.err_val], t2=type(seq[e_type_or_ix.err_val]))
+
+
+def uniform_dict_type(dictionary: Dict[K, A]) -> type:
+	assert_dict_is_uniform_type(dictionary)
+	assert len(dictionary) > 0, "Dictionary is empty, cannot tell what type the values are"
+
+	first_value = dictionary.values()[0]
+	return type(first_value)
+
+
+def assert_dict_is_uniform(dictionary: Dict[K, Any]):
+	if not flags.DEBUG:
+		return
+
+	if len(dictionary) == 0:
+		return
+	else: # dictionary has values
+		values = list(dictionary.values())
+		e_type_or_ix = sequence_type(values)
+		assert res.is_right, \
+			"Sequence is not of uniform type. First value ({v1}) is of type {t1}, but another value ({v2}) is of type {t2}: {}"\
+			 .format(v1=values[0], t1=type(values[0]), v2=values[e_type_or_ix.err_val], t2=type(values[e_type_or_ix.err_val]))
+
+
+
+
+
+
+def optional_index(seq: Sequence[A], of: A) -> Optional[int]:
+	"""
+	Like list.index, but returns None if `needle` is not present
+	instead of throwing ValueError
+	"""
+	needle = of
+
+	if len(seq) == 0:
+		return None
+
+	try:
+		return seq.index(needle)
+	except ValueError:
+		return None
+
+
+def parts_of_len(xs: Sequence[A], len: int) -> List[List[A]]:
+	""" 
+	Splits a list into lists of length `n`.
+	parts_of_len(3, [0,1,2,3,4,5,6]) == [[0,1,2], [3,4,5], [6]]
+	parts_of_len(3, [0]) == [[0]]
+	parts_of_len(3, []) == []
+	parts_of_len(0,  _ ) == Error
+	parts_of_len(-3, _ ) == Error
+	"""
+	n = len
+	len = builtins.len
+	assert n >= 1, "Part length must be >= 1 (is {n})" \
+				   .format(n=n)
+
+	if len(xs) == 0:
+		return []
+	else: # xs has values
+		parts = []
+		while(len(xs) > 0):
+			n_elems, xs = xs[:n], xs[n:]
+			parts.append(n_elems)
+		return parts
+
+
+
 def limit_upper(x: A, high: A) -> A:
 	return min(x, high)
-	
+
 def limit_lower(x: A, low: A) -> A:
 	return max(low, x)
 
@@ -74,12 +256,12 @@ def point_offset(a: Vec2, offset: Vec2) -> Vec2:
 	return Vec2(a.x+offset.x, a.y+offset.y)
 
 
-def range_incl(low: int, high: int, step: int = 1) -> Iterable[int]:
+def range_incl(first: int, last: int, step: int = 1) -> Iterable[int]:
 	"""
 	Like range, but including the last element.
 	rangeb(n, k) == range(n, k+1)
 	"""
-	return range(low, high+1, step)
+	return range(first, last+1, step)
 
 def err_unsupported_action(action, state):
 	raise ValueError("action " + str(action)+ " is not supported in state " + str(state) )
@@ -112,6 +294,9 @@ def get_in(path: Iterable[Any], x: A) -> B:
 
 # 	return x.transform(*transformations)
 
+
+
+
 def set_in_tuple(path: NonEmpty[Any], val: B, tup: tuple) -> tuple:
 	assert is_namedtuple(tup), \
 			"{} is not a namedtuple, it's a {}".format(tup, type(tup))
@@ -137,6 +322,7 @@ def modify_in_tuple(path: NonEmpty[Any], fn: Fun[Anys, Any], tup: tuple) -> tupl
 		ix, *path2 = path
 		tup_in = getattr(tup, ix)
 		return tup._replace(**{ix: modify_in_tuple(path2, fn, tup_in)})
+
 
 
 

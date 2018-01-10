@@ -3,6 +3,7 @@ from typing import (
 	Tuple,
 	List,
 	Dict,
+	Deque,
 	BinaryIO,
 	Sequence,
 	Generic,
@@ -23,7 +24,9 @@ from pyrsistent import (
 Hz = 1
 
 TV = TypeVar
-K = TV('K'); A = TV('A'); B = TV('B'); C=TV('C')
+K = TV('K'); A = TV('A'); B = TV('B'); C=TV('C'); R = TV('R')
+
+
 
 class PMap_(Generic[K, A]):
 	pass
@@ -37,8 +40,18 @@ class IdEff(Generic[A]):
 class IO_(Generic[A]):
 	pass
 
+class OrderedDict_(Generic[K, A]):
+	pass
+
+class DefaultDict_(Generic[K, A]):
+	pass
+
 class NDArray(Generic[A]):
 	pass
+
+
+IMGui = IO_ # type of expressions that draw IMGui stuff, but don't do other side effects 
+Unit = None
 
 NonEmpty = Iterable
 
