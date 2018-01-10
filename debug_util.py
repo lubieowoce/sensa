@@ -304,7 +304,7 @@ def sequence_to_str(seq: Sequence[A],
 
 
 def name_and_multiline_str(name: str, multiline_str: str) -> str:
-	return name + '\n' + indent_multiline_str(multiline_str, 4)
+	return name + ':' + '\n' + indent_multiline_str(multiline_str, 4)
 
 
 def indent_str(string: str, indent: int) -> str:

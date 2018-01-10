@@ -54,7 +54,7 @@ def is_in_rect(point: Vec2, rect: Rect) -> bool:
 		top_left.y <= point.y <= bottom_right.y
 
 
-def add_rect(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IO_[None]:
+def add_rect_coords(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IMGui[None]:
 	""" Necessary because i haven't added the bindings for add_rect yet """
 	top_right   = Vec2(bottom_right.x, top_left.y)
 	bottom_left = Vec2(top_left.x, bottom_right.y)
@@ -63,6 +63,19 @@ def add_rect(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IO_[None]:
 	draw_list.add_line(top_right, bottom_right, color=color)
 	draw_list.add_line(bottom_right, bottom_left, color=color)
 	draw_list.add_line(bottom_left, top_left, color=color)
+
+def add_rect(draw_list, rect: Rect, color) -> IMGui[None]:
+	top_left, bottom_right = rect
+	add_rect_coords(draw_list, top_left, bottom_right, color)
+
+
+
+def one_is_true_of(x: A, preds: Sequence[Fun[[A], bool]]) -> bool:
+	return one_is_true([ pred(x) for pred in preds ])
+
+def one_is_true(bools: Sequence[bool]) -> bool:
+	return bools.count(True) == 1
+
 
 
 class Either(Generic[A, B]):
@@ -167,13 +180,13 @@ def assert_sequence_is_uniform(seq: Sequence[A]):
 		return
 	else: # seq has values
 		e_type_or_ix = sequence_type(seq)
-		assert res.is_right, \
+		assert e_type_or_ix.is_right, \
 			"Sequence is not of uniform type. First value ({v1}) is of type {t1}, but value at index {ix} ({v2}) is of type {t2}: {}"\
 			 .format(v1=seq[0], t1=type(seq[0]), ix=e_type_or_ix.err_val, v2=seq[e_type_or_ix.err_val], t2=type(seq[e_type_or_ix.err_val]))
 
 
 def uniform_dict_type(dictionary: Dict[K, A]) -> type:
-	assert_dict_is_uniform_type(dictionary)
+	assert_dict_is_uniform(dictionary)
 	assert len(dictionary) > 0, "Dictionary is empty, cannot tell what type the values are"
 
 	first_value = dictionary.values()[0]
@@ -189,7 +202,7 @@ def assert_dict_is_uniform(dictionary: Dict[K, Any]):
 	else: # dictionary has values
 		values = list(dictionary.values())
 		e_type_or_ix = sequence_type(values)
-		assert res.is_right, \
+		assert e_type_or_ix.is_right, \
 			"Sequence is not of uniform type. First value ({v1}) is of type {t1}, but another value ({v2}) is of type {t2}: {}"\
 			 .format(v1=values[0], t1=type(values[0]), v2=values[e_type_or_ix.err_val], t2=type(values[e_type_or_ix.err_val]))
 

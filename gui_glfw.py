@@ -21,15 +21,18 @@ from util import (
 	range_incl, limit_lower,
 	point_offset, point_subtract_offset,
 	Rect, rect_width,
-	add_rect, get_window_content_rect,
+	add_rect_coords, get_window_content_rect,
 )
 from id_eff import id_and_effects, run_id_eff, get_ids
 from imgui_widget import (window, group, child)
 from counter import *
 from counter_list import *
 
-from plot import plot_signal
-from time_range import TimeRange
+from plot import (
+	signal_plot, update_signal_plot,
+	initial_signal_plot_state,
+	set_plot_empty, select_plot_signal,
+)
 
 from files import *
 from signal import Signal
@@ -111,12 +114,7 @@ def execute_effects(effects: List[Effect]) -> IO_[None]:
 
 
 ui = {
-	'plot': {
-		'time_range': None,
-		'dragging_plot': False,
-		'time_range_before_drag': None,
-		# 'hovered': False,
-	},
+	'plot': initial_signal_plot_state(),
 	'plotted_channel': (None, 0),
 	'plot_window_movable': False,
 }
@@ -153,8 +151,11 @@ def draw():
 			choices = [None]  + labels
 			changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], texts)
 			if changed:
+				ui['plotted_channel_changed'] = True
 				ui['plotted_channel'] = (choices[selected_ix], selected_ix)
-				ui['plot']['time_range'] = None
+			else:
+				ui['plotted_channel_changed'] = False
+
 
 		def right_pad(s: str, limit: int) -> str:
 			n_spaces = max(0, limit-len(s))
@@ -172,29 +173,30 @@ def draw():
 		content_top_left, content_bottom_right = get_window_content_rect()
 		draw_list = im.get_window_draw_list()
 
-		if ui['plotted_channel'][0] != None:
-			# checkbox
-			# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
-			# if changed:
-			#     ui['plot_window_movable'] = window_movable
+		# checkbox
+		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
+		# if changed:
+		#     ui['plot_window_movable'] = window_movable
 
-			# plot
-			label, _ = ui['plotted_channel']
-			signal = data['signals'][label]
+		# plot
+		if ui['plotted_channel_changed']:
+			o_signal_id, _ = ui['plotted_channel']
+			if o_signal_id == None:
+				set_plot_empty(ui['plot'])
+			else:
+				signal_id = o_signal_id
+				select_plot_signal(ui['plot'], signal_id)
 
-			plot_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
-							 point_offset(content_bottom_right, im.Vec2(-10, -10)))
+		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
+						 point_offset(content_bottom_right, im.Vec2(-10, -10)))
 
-			plot_signal(draw_list, emit, ui['plot'], signal, plot_area)
-		else: # no channel label selected
-			im.text("Nothing here? Load a file and select a channel.")
-			gray = (0.8, 0.8, 0.8, 1)
-			add_rect(draw_list,
-					 point_offset(content_top_left,     im.Vec2(10, 30)),
-					 point_subtract_offset(content_bottom_right, im.Vec2(10, 10)),
-					 color=gray)
+		update_signal_plot(ui['plot'], data['signals'], plot_draw_area)
+
+		signal_plot(draw_list, emit, ui['plot'], data['signals'], plot_draw_area)
 
 
+	# debug_log_dict('ui', ui)
+	# debug_log_dict("ui['plot']", ui['plot'])
 	debug_frame_ended()
 	debug_window()
 
