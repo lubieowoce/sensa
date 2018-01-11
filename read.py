@@ -1,8 +1,8 @@
 # This module uses code created by Wiktor Rorot <wiktor.rorot@gmail.com> as a part of pytnam project
 # (https://github.com/pytnam/pytnam) licensed under GNU GPL.
 # The original code has been  modified.
+
 import re
-# from collections import defaultdict
 import numpy as np # type: ignore
 
 from types_util import *
@@ -10,6 +10,7 @@ from types_util import *
 # TODO: try converting Dict[str, Any] to TypedDict
 # 	http://mypy.readthedocs.io/en/latest/kinds_of_types.html#typeddict
 def read_edf(path: str) -> Tuple[ Dict[str, Any], Dict[str, Sequence[float]] ] :
+# def read_edf(path: str):
 	"""
 	Reads a .edf file.
 		header: Dict[str, Any], a dictionary containing general information about the recording from the .edf file's header.

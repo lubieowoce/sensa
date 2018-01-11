@@ -1,9 +1,11 @@
-# from util import (err_unsupported_action)
+# from sensa_util import (err_unsupported_action)
+
+
 
 from types_util import *
 from pyrsistent import (m, pmap, v, pvector, thaw, freeze)
 
-from signal import Signal
+from eeg_signal import Signal
 from read import read_edf
 
 LOAD_FILE = "LOAD_FILE"

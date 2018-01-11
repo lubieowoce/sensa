@@ -11,7 +11,7 @@ mypy = "*"
 typing = "*"
 "970d486" = {path = ".\\whl\\x64\\numpy\\numpy-1.13.3+mkl-cp35-cp35m-win_amd64.whl"}
 pyrsistent = "*"
-imgui = {git = "https://github.com/lubieowoce/pyimgui"}
+# imgui = {git = "https://github.com/lubieowoce/pyimgui"}
 
 
 [requires]

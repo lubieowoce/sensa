@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
 	QLineEdit,
 )
 from types_util import *
-from util import id_
+from sensa_util import id_
 from pyrsistent import m
 
 class InputField(QLineEdit):
@@ -10,7 +10,7 @@ class InputField(QLineEdit):
 		"""
 		`from_str`: str -> a   for some type a.
 		It will be used to decode the input text.
-		Defaults to util.id_ = lambda x: x
+		Defaults to sensa_util.id_ = lambda x: x
 		"""
 		super().__init__(input)
 

@@ -8,7 +8,7 @@ from debug_util import (
 	Range
 )
 
-from util import (
+from sensa_util import (
 	point_offset, point_subtract_offset,
 	clamp, limit_lower, limit_upper,
 	Rect, is_in_rect, rect_width, rect_height,
@@ -17,7 +17,7 @@ from util import (
 	range_incl
 )
 from time_range import *
-from signal import Signal
+from eeg_signal import Signal
 
 import math
 import numpy as np

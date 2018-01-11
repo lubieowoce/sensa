@@ -1,7 +1,7 @@
 print("running main.py")
 
 from types_util import *
-from signal import Signal
+from eeg_signal import Signal
 from multisignal import MultiSignal
 from read import read_edf
 from filters import \

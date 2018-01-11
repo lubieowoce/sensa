@@ -15,8 +15,8 @@ from PyQt5.QtCore import (
 from reactive import *
 
 from trans import Trans, TransChain
-from signal import Signal
-from util import chain, dict_set_all, setitem
+from eeg_signal import Signal
+from sensa_util import chain, dict_set_all, setitem
 from operator import itemgetter
 
 

@@ -3,7 +3,7 @@ from types_util import *
 from functools import partial as part
 import numpy as np
 from scipy.signal import butter, lfilter
-from signal import Signal
+from eeg_signal import Signal
 from trans import Trans
 
 # Filters based on:

@@ -1,4 +1,4 @@
-from util import (err_unsupported_action)
+from sensa_util import (err_unsupported_action)
 
 from types_util import *
 from pyrsistent import (m, pmap, v, pvector, thaw, freeze)

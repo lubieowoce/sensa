@@ -1,7 +1,7 @@
 from types_util import *
-from signal import Signal
+from eeg_signal import Signal
 
-from util import chain
+from sensa_util import chain
 
 
 class Trans():

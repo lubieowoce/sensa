@@ -12,7 +12,7 @@ from collections import (
 from types_util import *
 from imgui_widget import (window, group, child)
 
-from util import (
+from sensa_util import (
 	uniform_dict_type, uniform_sequence_type,
 	dict_to_function,
 	get_mouse_position,

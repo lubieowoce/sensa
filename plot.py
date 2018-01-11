@@ -4,13 +4,14 @@ from imgui import Vec2
 from types_util import *
 
 from imgui_widget import window
+from better_combo import str_combo_with_none, str_combo
 
 from debug_util import (
 	debug_log, debug_log_time, debug_log_dict,
 	Range
 )
 
-from util import (
+from sensa_util import (
 	point_offset, point_subtract_offset,
 	clamp, limit_lower, limit_upper,
 
@@ -22,7 +23,7 @@ from util import (
 	one_is_true_of,
 )
 from time_range import * 
-from signal import Signal
+from eeg_signal import Signal
 
 import math
 import numpy as np
@@ -77,6 +78,8 @@ def initial_signal_plot_state() -> Dict[str, Any]:
 			'signal_id': None,
 			'time_range': None,
 
+			'signal_id_changed': False,
+
 			'dragging_plot': False,
 			'time_range_before_drag': None,
 		}
@@ -110,25 +113,38 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 
 
 
-def signal_plot_window(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui: Dict[str, Any], emit) -> IMGui[Rect]:
+def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui: Dict[str, Any], emit) -> IMGui[Rect]:
 
 	PLOT_WINDOW_FLAGS = 0 if ui['plot_window_movable'] else im.WINDOW_NO_MOVE
 
-	with window(name="view (drag to scroll)", flags=PLOT_WINDOW_FLAGS):
+	with window(name=name, flags=PLOT_WINDOW_FLAGS):
 		content_top_left, content_bottom_right = get_window_content_rect()
 		draw_list = im.get_window_draw_list()
+
+		# signal selector
+		if len(signal_data) > 0:
+			signal_ids =  sorted(signal_data.keys())
+			debug_log('signal_ids', signal_ids)
+			changed, o_selected_signal_id = str_combo_with_none("channel", plot_state['signal_id'], signal_ids)
+			if changed:
+				plot_state['signal_id_changed'] = True
+				plot_state['signal_id'] = o_selected_signal_id
+			else:
+				plot_state['signal_id_changed'] = False
+		else:
+			im.text("No files loaded")
 
 		# checkbox
 		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
 		# if changed:
 		#     ui['plot_window_movable'] = window_movable
 
-		# plot
+		
 		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
 
 
-		signal_plot(ui['plot'], signal_data, plot_draw_area, draw_list, emit)
+		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, emit)
 
 	return plot_draw_area
 
@@ -151,13 +167,14 @@ def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot
 def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui: Dict[str, Any]) -> IO_[None]:
 	assert_is_valid_plot(plot_state)
 
-	if ui['plotted_channel_changed']:
-		o_signal_id, _ = ui['plotted_channel']
+	if plot_state['signal_id_changed']:
+
+		o_signal_id = plot_state['signal_id']
 		if o_signal_id == None:
-			set_plot_empty(ui['plot'])
+			set_plot_empty(plot_state)
 		else:
 			signal_id = o_signal_id
-			select_plot_signal(ui['plot'], signal_id)
+			select_plot_signal(plot_state, signal_id)
 
 	if is_empty_plot(plot_state):
 		return

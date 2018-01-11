@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9344d8178de97de522fbb9cc49a4e4cde781b75584cd0c11e2d2c6550592dc62"
+            "sha256": "734b7d0c0989295b4370c88716c66bdae63bfe3479ad9d5b99a340fa38bbdf9c"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -31,9 +31,6 @@
     "default": {
         "970d486": {
             "path": ".\\whl\\x64\\numpy\\numpy-1.13.3+mkl-cp35-cp35m-win_amd64.whl"
-        },
-        "imgui": {
-            "git": "https://github.com/lubieowoce/pyimgui"
         },
         "mypy": {
             "hashes": [

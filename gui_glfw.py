@@ -13,11 +13,11 @@ from pyrsistent import (m, pmap, v, pvector)
 from types_util import *
 from debug_util import (
 	debug_window,
-	debug_log,
+	debug_log, debug_log_dict,
 	debug_frame_ended,
 )
 
-from util import (
+from sensa_util import (
 	range_incl, limit_lower,
 	point_offset, point_subtract_offset,
 	Rect, rect_width,
@@ -28,13 +28,15 @@ from imgui_widget import (window, group, child)
 from counter import *
 from counter_list import *
 
+from better_combo import str_combo_with_none, str_combo
+
 from plot import (
 	initial_signal_plot_state, update_signal_plot,
 	signal_plot_window, 
 )
 
 from files import *
-from signal import Signal
+from eeg_signal import Signal
 # from multisignal import MultiSignal
 # from filters import \
 #     lowpass_filter,  make_lowpass_tr, \
@@ -113,9 +115,11 @@ def execute_effects(effects: List[Effect]) -> IO_[None]:
 
 
 ui = {
-	'plot': initial_signal_plot_state(),
-	'plotted_channel': (None, 0),
+	'plot_1': initial_signal_plot_state(),
+	'plot_2': initial_signal_plot_state(),
 	'plot_window_movable': False,
+
+	'selected_channel': "C3",
 }
 
 
@@ -142,35 +146,31 @@ def draw():
 		if im.button("load example"):
 			emit(load_file(example_file))
 
-		labels = sorted(data['signals'].keys())
 
 		if len(data['signals']) > 0:
-			im.separator()
-			texts   = [" - "] + labels
-			choices = [None]  + labels
-			changed, selected_ix = im.combo("channel", ui['plotted_channel'][1], texts)
-			if changed:
-				ui['plotted_channel_changed'] = True
-				ui['plotted_channel'] = (choices[selected_ix], selected_ix)
-			else:
-				ui['plotted_channel_changed'] = False
+			labels = sorted(data['signals'].keys())
 
 
-		def right_pad(s: str, limit: int) -> str:
-			n_spaces = max(0, limit-len(s))
-			return s + (' ' * n_spaces)
+			def right_pad(s: str, limit: int) -> str:
+				n_spaces = max(0, limit-len(s))
+				return s + (' ' * n_spaces)
 
-		for label in labels:
-			im.text_colored(right_pad(label,5), 0.2, 0.8, 1)
-			im.same_line()
-			im.text(str(data['signals'][label]))
+			for label in labels:
+				im.text_colored(right_pad(label,5), 0.2, 0.8, 1)
+				im.same_line()
+				im.text(str(data['signals'][label]))
+		else:
+			im.text("No signals loaded")
 
 	# signal plot
-	ui['plot_rect'] = signal_plot_window(ui['plot'], data['signals'], ui, emit)
-	update_signal_plot(ui['plot'], data['signals'], ui['plot_rect'], ui)
+	ui['plot_rect_1'] = signal_plot_window("view (drag to scroll)##1", ui['plot_1'], data['signals'], ui=ui, emit=emit)
+	update_signal_plot(ui['plot_1'], data['signals'], ui['plot_rect_1'], ui=ui)
+
+	ui['plot_rect_2'] = signal_plot_window("view (drag to scroll)##2", ui['plot_2'], data['signals'], ui=ui, emit=emit)
+	update_signal_plot(ui['plot_2'], data['signals'], ui['plot_rect_2'], ui=ui)
 
 
-	# debug_log_dict('ui', ui)
+	debug_log_dict('ui', ui)
 	# debug_log_dict("ui['plot']", ui['plot'])
 	debug_frame_ended()
 	debug_window()

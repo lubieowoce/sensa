@@ -24,7 +24,7 @@ from PyQt5.QtCore import (
 )
 
 from types_util import *
-from util import *
+from sensa_util import *
 
 from pyrsistent import (m, pmap, v, pvector, ny)
 from store import Store

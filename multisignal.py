@@ -1,6 +1,6 @@
 from types_util import *
 
-from signal import Signal
+from eeg_signal import Signal
 import numpy as np
 
 

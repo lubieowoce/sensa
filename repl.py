@@ -6,7 +6,7 @@ from pprint import pprint as pp
 # import read as r
 
 # import signal as s
-# from signal import Signal
+# from eeg_signal import Signal
 
 # import multisignal as m
 # from multisignal import MultiSignal

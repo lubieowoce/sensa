@@ -1,6 +1,6 @@
 from pyrsistent import v
 from types_util import *
-from util import get
+from sensa_util import get
 
 class Store:
 	def __init__(store, initial_state, update_fn):
@@ -13,7 +13,7 @@ class Store:
 		"""
 		Path - a list of indexes, to extract some nested bit of state.
 		When the store's state changes, it will call
-			`sub_fun( util.get(store.get_state(), path) )`
+			`sub_fun( sensa_util.get(store.get_state(), path) )`
 		"""
 
 

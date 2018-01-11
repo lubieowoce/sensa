@@ -1,7 +1,7 @@
 print("running main.py")
 
 from types_util import *
-from signal import Signal
+from eeg_signal import Signal
 from read import read_edf
 import matplotlib.pyplot as plt
 
