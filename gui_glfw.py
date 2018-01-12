@@ -32,15 +32,25 @@ from better_combo import str_combo_with_none, str_combo
 
 from plot import (
 	initial_signal_plot_state, update_signal_plot,
-	signal_plot_window, 
+	signal_plot_window,
+	is_empty_plot, is_full_plot,
+	select_plot_signal, set_plot_time_range,
+)
+
+from filter_box import (
+	filter_box, update_filter_box,
+	FILTER_BOX_OUTPUT_SIGNAL_ID,
+	is_filter_box_disconnected, is_filter_box_connected,
+	set_filter_box_input_signal_id, 
 )
 
 from files import *
 from eeg_signal import Signal
 # from multisignal import MultiSignal
-# from filters import \
-#     lowpass_filter,  make_lowpass_tr, \
-#     highpass_filter, make_highpass_tr
+from filters import (
+    make_lowpass_tr,
+)
+    # highpass_filter, make_highpass_tr
 # from trans import Trans, TransChain
 
 
@@ -114,12 +124,28 @@ def execute_effects(effects: List[Effect]) -> IO_[None]:
 		handle(data, eff)
 
 
+
+# ==============================================
+
+
 ui = {
-	'plot_1': initial_signal_plot_state(),
-	'plot_2': initial_signal_plot_state(),
 	'plot_window_movable': False,
 
-	'selected_channel': "C3",
+	'plot_1': initial_signal_plot_state(),
+	'plot_2': initial_signal_plot_state(),
+
+
+	'filter_box': {
+		'input_signal_id': None,
+		'input_signal_id_changed': True,
+		'trans': make_lowpass_tr(),
+		'param_value_changed': False,
+	},
+
+
+	'flags': {
+		'numpy_resample': False,
+	}
 }
 
 
@@ -146,6 +172,15 @@ def draw():
 		if im.button("load example"):
 			emit(load_file(example_file))
 
+		im.same_line()
+		changed, move = im.checkbox("move plots", ui['plot_window_movable'])
+		if changed:
+			ui['plot_window_movable'] = move
+		im.same_line()
+		changed, val = im.checkbox("numpy resample", ui['flags']['numpy_resample'])
+		if changed:
+			ui['flags']['numpy_resample'] = val
+
 
 		if len(data['signals']) > 0:
 			labels = sorted(data['signals'].keys())
@@ -162,9 +197,55 @@ def draw():
 		else:
 			im.text("No signals loaded")
 
-	# signal plot
+
+
+	# 'filter_box': {
+	# 	'input_signal_id': None,
+	# 	'input_signal_id_changed': True,
+	# 	'trans': make_lowpass_tr,
+	# 	'param_value_changed': False,
+	# },
+
+
+
+
+	# signal plot 1
 	ui['plot_rect_1'] = signal_plot_window("view (drag to scroll)##1", ui['plot_1'], data['signals'], ui=ui, emit=emit)
 	update_signal_plot(ui['plot_1'], data['signals'], ui['plot_rect_1'], ui=ui)
+
+
+
+	# filter box
+	filter_box_state = ui['filter_box']
+
+	# DEMO
+	# filter box should take the signal displayed in plot 1 as input
+	if is_filter_box_disconnected(filter_box_state) and is_full_plot(ui['plot_1']) \
+	   or is_filter_box_connected(filter_box_state) and ui['plot_1']['signal_id_changed']:
+
+		set_filter_box_input_signal_id(filter_box_state, ui['plot_1']['signal_id'])
+	else:
+		filter_box_state['input_signal_id_changed'] = False
+	# END DEMO
+
+	filter_box(filter_box_state, data['signals'])
+	update_filter_box(filter_box_state, data['signals'])
+
+
+
+
+	# signal plot 2
+
+	# DEMO
+	# plot 2 should display the output of filter box
+	if FILTER_BOX_OUTPUT_SIGNAL_ID in data['signals'] and is_empty_plot(ui['plot_2']):
+		select_plot_signal(ui['plot_2'], FILTER_BOX_OUTPUT_SIGNAL_ID)
+
+	# plot 2 should have the same time range as plot 1
+	if is_full_plot(ui['plot_1']) and is_full_plot(ui['plot_2']):
+		set_plot_time_range(ui['plot_2'], ui['plot_1']['time_range'])
+		
+	# END DEMO
 
 	ui['plot_rect_2'] = signal_plot_window("view (drag to scroll)##2", ui['plot_2'], data['signals'], ui=ui, emit=emit)
 	update_signal_plot(ui['plot_2'], data['signals'], ui['plot_rect_2'], ui=ui)
@@ -175,8 +256,12 @@ def draw():
 	debug_frame_ended()
 	debug_window()
 
+ 	
 
 
+
+
+# ===================================================
 
 
 def main():

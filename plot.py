@@ -79,6 +79,7 @@ def initial_signal_plot_state() -> Dict[str, Any]:
 			'time_range': None,
 
 			'signal_id_changed': False,
+			'time_range_changed': False,
 
 			'dragging_plot': False,
 			'time_range_before_drag': None,
@@ -97,6 +98,9 @@ def select_plot_signal(plot_state: Dict[str, Any], signal_id: str) -> IO_[None]:
 	plot_state['time_range'] = None
 	assert is_freshly_selected_plot(plot_state)
 
+def set_plot_time_range(plot_state: Dict[str, Any], time_range: TimeRange) -> IO_[None]:
+	plot_state['time_range'] = time_range
+	plot_state['time_range_changed'] = True
 
 white = (1.0, 1.0, 1.0, 1)
 
@@ -144,12 +148,12 @@ def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
 
 
-		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, emit)
+		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui, emit)
 
 	return plot_draw_area
 
 
-def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
+def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, ui, emit) -> IMGui[None]:
 	assert_is_valid_plot(plot_state)
 	debug_log('plot_state', plot_state_type(plot_state))
 
@@ -161,7 +165,7 @@ def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot
 		signal_id = plot_state["signal_id"]
 		signal = signal_data[signal_id]
 
-		show_full_plot(plot_state, signal, plot_draw_area, draw_list, emit)
+		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui, emit)
 
 
 def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui: Dict[str, Any]) -> IO_[None]:
@@ -190,7 +194,7 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 	if is_freshly_selected_plot(plot_state):
 		default_end_t = limit_upper(  width_px * signal.sampling_interval  , high=max_t)
-		plot_state['time_range'] = TimeRange(0.0, default_end_t)
+		set_plot_time_range(plot_state, TimeRange(0.0, default_end_t))
 	
 
 	assert is_full_plot(plot_state)
@@ -291,7 +295,11 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 	# UPDATE THE TIME RANGE based on input
-	plot_state['time_range'] = updated_time_range
+	if plot_state['time_range'] != updated_time_range:
+		set_plot_time_range(plot_state, updated_time_range)
+	else:
+		plot_state['time_range_changed'] = False
+	
 
 
 	# END OF HANDLING USER INPUT
@@ -300,7 +308,7 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 
-def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
+def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect,  draw_list, ui, emit) -> IMGui[None]:
 	assert is_full_plot(plot_state)
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
@@ -389,7 +397,12 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 
 	if n_samples_in_range > n_points_in_plot:
 		assert n_points_in_plot == width_px
-		data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
+		if ui['flags']['numpy_resample']:
+			point_times = np.linspace(start=0., stop=(len(signal.data)-1)*time_between_samples, num=len(signal.data)) 
+			sampled_times = np.linspace(start=start_t, stop=end_t, num=n_points_in_plot)
+			data_part = np.interp(x=sampled_times, xp=point_times, fp=signal.data)
+		else:
+			data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
 	else: # n_samples_in_range <= n_points_in_plot
 		assert n_points_in_plot == n_samples_in_range
 		data_part = signal.data[first_ix : last_ix+1] 
