@@ -33,7 +33,7 @@ from better_combo import str_combo_with_none, str_combo
 from plot import (
 	initial_signal_plot_state, update_signal_plot,
 	signal_plot_window,
-	is_empty_plot, is_full_plot,
+	is_empty_plot, is_full_plot, is_freshly_selected_plot,
 	select_plot_signal, set_plot_time_range,
 	set_plot_empty,
 )
@@ -43,7 +43,7 @@ from filter_box import (
 	filter_box, update_filter_box,
 	FILTER_BOX_OUTPUT_SIGNAL_ID,
 	is_filter_box_disconnected, is_filter_box_connected,
-	set_filter_box_input_signal_id, 
+	disconnect_filter_box, set_filter_box_input_signal_id, 
 )
 
 from files import *
@@ -234,10 +234,13 @@ def draw():
 
 	# DEMO
 	# filter box should take the signal displayed in plot 1 as input
-	if is_filter_box_disconnected(filter_box_state) and is_full_plot(ui['plot_1']) \
-	   or is_filter_box_connected(filter_box_state) and ui['plot_1']['signal_id_changed']:
+	if (is_full_plot(ui['plot_1'] or is_freshly_selected_plot(ui['plot_1'])) \
+		and ui['plot_1']['signal_id_changed']):
 
 		set_filter_box_input_signal_id(filter_box_state, ui['plot_1']['signal_id'])
+
+	elif is_filter_box_connected(filter_box_state) and is_empty_plot(ui['plot_1']):
+		disconnect_filter_box(filter_box_state)
 	else:
 		filter_box_state['input_signal_id_changed'] = False
 	# END DEMO

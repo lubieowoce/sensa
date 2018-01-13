@@ -90,11 +90,13 @@ assert is_empty_plot(initial_signal_plot_state())
 
 def set_plot_empty(plot_state: Dict[str, Any]) -> IO_[None]:
 	plot_state['signal_id'] = None
+	plot_state['signal_id_changed'] = True
 	plot_state['time_range'] = None
 	assert is_empty_plot(plot_state)
 
 def select_plot_signal(plot_state: Dict[str, Any], signal_id: str) -> IO_[None]:
 	plot_state['signal_id'] = signal_id
+	plot_state['signal_id_changed'] = True
 	plot_state['time_range'] = None
 	assert is_freshly_selected_plot(plot_state)
 
@@ -131,12 +133,15 @@ def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[
 			debug_log('signal_ids', signal_ids)
 			changed, o_selected_signal_id = str_combo_with_none("channel", plot_state['signal_id'], signal_ids)
 			if changed:
-				plot_state['signal_id_changed'] = True
-				plot_state['signal_id'] = o_selected_signal_id
+				if o_selected_signal_id != None:
+					selected_signal_id = o_selected_signal_id
+					select_plot_signal(plot_state, selected_signal_id)
+				else:
+					set_plot_empty(plot_state)
 			else:
 				plot_state['signal_id_changed'] = False
 		else:
-			im.text("No files loaded")
+			im.text("No signals loaded")
 
 		# checkbox
 		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
