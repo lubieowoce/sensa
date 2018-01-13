@@ -1,14 +1,11 @@
 print("running main.py")
 
-from types_util import *
-from eeg_signal import Signal
-from read import read_edf
 import matplotlib.pyplot as plt
 
 
-from files import load_edf, example_file
+from files import load_edf, example_file_path
 
-signals = load_edf(example_file)
+signals = load_edf(example_file_path)
 signal = signals['C3']
 
 

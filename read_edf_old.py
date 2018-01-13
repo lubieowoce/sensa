@@ -2,7 +2,6 @@
 # This module was created by Wiktor Rorot <wiktor.rorot@gmail.com> as a part of pytnam project
 # (https://github.com/pytnam/pytnam) and is licensed under GNU GPL.
 
-import re
 from collections import defaultdict
 from io import FileIO
 import numpy as np

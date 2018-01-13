@@ -1,17 +1,22 @@
-from types_util import *
+from typing import (
+	Any,
+	Dict,
+)
+from types_util import (
+	IO_, IMGui, 
+)
 
 import imgui as im
 
 from eeg_signal import Signal
 from imgui_widget import window
-from better_combo import str_combo_with_none, str_combo
+from better_combo import str_combo_with_none
 
-from trans import Trans
+# from trans import Trans
 
 from filters import (
     available_filters
 )
-    # highpass_filter, make_highpass_tr
 
 FILTER_BOX_OUTPUT_SIGNAL_ID = 'filter_box_output'
 

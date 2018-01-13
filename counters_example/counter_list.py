@@ -1,9 +1,18 @@
 from sensa_util import (err_unsupported_action)
 
-from types_util import *
-from pyrsistent import (m, pmap, v, pvector, thaw, freeze)
-from id_eff import id_and_effects, is_in_id_eff
-from counter import counter
+from types_util import (
+	Any,
+	PMap_,
+	Action,
+	Fun,
+	IO_, IMGui,
+)
+
+import imgui as im
+from imgui_widget import window, child
+from pyrsistent import (m, v, thaw, freeze)
+from id_eff import IdEff, id_and_effects
+from counter import counter, set_value, increment, decrement
 
 # counter_list = lambda id: m(id=id, items=v())
 
@@ -51,11 +60,11 @@ def update_counter_list(state, action) -> IdEff[PMap_[str, Any]]:
 		return \
 		 	state.set('counters', m()).set('counter_list', v())
 	else:
-		err_unsupported_action(counters, action)
-		return counters
+		err_unsupported_action(state, action)
+		return state
 
 
-def draw_counter_list(emit: Fun[[Action], IO_[None]]) -> IO_[None]:
+def draw_counter_list(state, emit: Fun[[Action], IO_[None]]) -> IMGui[None]:
 	with window(name="counters"):
 	    im.text("counters")
 	    # with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
@@ -80,7 +89,7 @@ def draw_counter_list(emit: Fun[[Action], IO_[None]]) -> IO_[None]:
 	            if is_counter_visible:
 	                im.text(str(state.counters[id].val))
 
-	                imgui.separator()
+	                im.separator()
 
 	                changed, new_val = \
 	                    im.input_text('value', value=str(state.counters[id].val),

@@ -1,10 +1,17 @@
 import imgui as im
 from imgui import Vec2
 
-from types_util import *
+from typing import (
+	Any, Tuple,
+	List, Dict, 
+)
+from types_util import (
+	NDArray,
+	IO_, IMGui
+)
 
 from imgui_widget import window
-from better_combo import str_combo_with_none, str_combo
+from better_combo import str_combo_with_none
 
 from debug_util import (
 	debug_log, debug_log_time, debug_log_dict,
@@ -13,16 +20,22 @@ from debug_util import (
 
 from sensa_util import (
 	point_offset, point_subtract_offset,
-	clamp, limit_lower, limit_upper,
+	# limit_lower,
+	limit_upper,
 
 	Rect, is_in_rect, rect_width, rect_height,
-	add_rect_coords, add_rect,
+	add_rect,
 
 	get_mouse_position, get_window_content_rect,
 	range_incl,
 	one_is_true_of,
 )
-from time_range import * 
+
+from time_range import (
+	TimeRange, clamp_time_range, time_range_length,
+	scale_at_point_limited, time_range_subtract_offset, 
+)
+
 from eeg_signal import Signal
 
 import math
@@ -567,9 +580,9 @@ def n_indexes_from_range(first_ix: int, last_ix: int, n: int) -> List[int]:
 
 
 
-def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> (int, int):
+def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> Tuple[int, int]:
 	assert signal.sampling_interval >= 0, "sampling_interval ({}) must be >= 0.0" \
-										   .format(sampling_interval)
+										   .format(signal.sampling_interval)
 
 	time_between_samples = signal.sampling_interval
 	start_t, end_t = time_range
@@ -586,7 +599,7 @@ def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> (int, 
 	#       (rounding them like this is desirable for non-edge points because 
 	#        it guarantees that the ix will be inside the time range)
 
-	return math.floor(f_ix)
+	return (first_ix, last_ix)
 
 
 

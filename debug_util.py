@@ -8,9 +8,19 @@ from collections import (
 	namedtuple,
 )
 
+from typing import (
+	Any, 
+	Dict, Sequence, Optional, Tuple, Deque, List,
+)
+from types_util import (
+	A,
+	OrderedDict_,
+	Fun, 
+	IO_, IMGui,
+)
 
-from types_util import *
-from imgui_widget import (window, group, child)
+
+from imgui_widget import window #, group, child
 
 from sensa_util import (
 	uniform_dict_type, uniform_sequence_type,
@@ -94,7 +104,7 @@ def debug_log_dict(name: str, dictionary: Dict[str, Any]) -> Debug[None]:
 def debug_log_seq(name: str, seq: Sequence[A]) -> Debug[None]:
 	if not DEBUG:
 		return
-	debug_dict['sequences'][name] = dictionary
+	debug_dict['sequences'][name] = seq
 
 
 
@@ -282,7 +292,7 @@ def show_sequence(seq: Sequence[A], name: str = None) -> IMGui[None]:
 	if name == None:
 		im.text(seq_str)
 	else:
-		im.text( name_and_multiline_str(name, dict_str) )
+		im.text( name_and_multiline_str(name, seq_str) )
 
 
 

@@ -1,9 +1,26 @@
-from types_util import *
+from typing import (
+	Tuple, List,
+	Generic,
+)
+from types_util import (
+	Id, Effect,
+	A,
+	Fun, Anys,
+)
+
+from sensa_util import identity
+
 from flags import DEBUG
 
 import builtins
 # Only way to make a function visible to all modules.
 # https://stackoverflow.com/a/15959638
+
+
+class IdEff(Generic[A]):
+	""" A computation of type A that uses `get_id` and `emit_effect` """
+	pass
+
 
 def run_id_eff(f: Fun[Anys, IdEff[A]], id: Id) -> Fun[ Anys,  Tuple[A, Id, List[Effect]] ]:
 	"""

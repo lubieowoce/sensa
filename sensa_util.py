@@ -1,8 +1,19 @@
-from types_util import *
+from typing import (
+	Any,
+	Dict, Optional, Sequence, List, Iterable,
+	Generic,
+)
+from types_util import (
+	K, A, B, R, 
+	PMap_,
+	NonEmpty,
+	Fun, Anys,
+	IO_, IMGui, 
+)
 
 
 import builtins
-from functools import partial
+# from functools import partial
 from itertools import islice
 from collections import namedtuple
 
@@ -100,7 +111,7 @@ class Right(Either):
 	@property
 	def is_right(right): return True
 	@property
-	def err_val(left): raise Exception("Tried calling err_val on " + str(right))
+	def err_val(right): raise Exception("Tried calling err_val on " + str(right))
 	@property
 	def res_val(right): return right.val
 	def __str__(right): return "Right({})".format(right.val)

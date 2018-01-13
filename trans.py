@@ -1,4 +1,8 @@
-from types_util import *
+from typing import (
+	Any,
+	Dict, Sequence, List,
+)
+
 from eeg_signal import Signal
 
 from sensa_util import chain
@@ -30,6 +34,8 @@ class Trans():
 
 	def __repr__(self):
 		return self.name + '(' + str(self.params) + ')'
+
+
 
 class TransChain:
 	# A simple editable list of Transes.

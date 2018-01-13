@@ -1,27 +1,15 @@
 from typing import (
 	Any,
-	Tuple,
-	List,
-	Dict,
-	Deque,
-	BinaryIO,
 	Sequence,
-	Generic,
-	TypeVar,
-	Optional,
-	Iterable,
 	Callable,
-	IO,
+	Generic, TypeVar,
 )
 
-from pyrsistent import (
-	PMap,
-	PVector, 
-)
+# from pyrsistent import (
+# 	PMap,
+# 	PVector, 
+# )
 
-# from store import Store
-
-Hz = 1
 
 TV = TypeVar
 K = TV('K'); A = TV('A'); B = TV('B'); C=TV('C'); R = TV('R')
@@ -33,9 +21,6 @@ class PMap_(Generic[K, A]):
 class PVector_(Generic[A]):
 	pass
 
-class IdEff(Generic[A]):
-	""" A computation of type A that uses `get_id` and `emit_effect` """
-	pass
 
 class IO_(Generic[A]):
 	pass
@@ -53,7 +38,7 @@ class NDArray(Generic[A]):
 IMGui = IO_ # type of expressions that draw IMGui stuff, but don't do other side effects 
 Unit = None
 
-NonEmpty = Iterable
+NonEmpty = Sequence
 
 WidgetState = PMap_[str, Any]
 

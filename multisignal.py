@@ -1,4 +1,6 @@
-from types_util import *
+from typing import (
+	Sequence,
+)
 
 from eeg_signal import Signal
 import numpy as np

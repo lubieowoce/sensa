@@ -1,13 +1,17 @@
 print("running main.py")
 
-from types_util import *
 from eeg_signal import Signal
-from multisignal import MultiSignal
+# from multisignal import MultiSignal
 from read import read_edf
-from filters import \
-	lowpass_filter,  make_lowpass_tr, \
-	highpass_filter, make_highpass_tr
-from trans import Trans, TransChain
+from filters import (
+	# lowpass_filter, 
+	make_lowpass_tr, 
+	# highpass_filter,
+	make_highpass_tr,
+)
+
+# from trans import Trans, TransChain
+from trans import TransChain
 # import biosppy.signals.eeg as e 
 import matplotlib.pyplot as plt
 

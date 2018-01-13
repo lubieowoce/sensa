@@ -2,10 +2,13 @@
 # (https://github.com/pytnam/pytnam) licensed under GNU GPL.
 # The original code has been  modified.
 
-import re
 import numpy as np # type: ignore
 
-from types_util import *
+from typing import (
+	Any,
+	Tuple, Dict, Sequence,
+	BinaryIO,
+)
 
 # TODO: try converting Dict[str, Any] to TypedDict
 # 	http://mypy.readthedocs.io/en/latest/kinds_of_types.html#typeddict

@@ -1,4 +1,7 @@
-from types_util import *
+from typing import (
+	Any,
+	Dict,
+)
 
 class Signal:
 	"""

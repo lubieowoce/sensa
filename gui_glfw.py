@@ -6,29 +6,30 @@ import imgui
 import imgui as im
 from imgui.integrations.glfw import GlfwRenderer
 
+from sys import exit
 from time import sleep
-from collections import OrderedDict
-from pyrsistent import (m, pmap, v, pvector)
+from pyrsistent import m #, pmap, v, pvector)
 
-from types_util import *
+from typing import (
+	Any,
+	List,
+)
+from types_util import (
+	PMap_,
+	Action, Effect,
+	IO_,
+)
+
 from debug_util import (
 	debug_window,
 	debug_log, debug_log_dict,
 	debug_frame_ended,
 )
 
-from sensa_util import (
-	range_incl, limit_lower,
-	point_offset, point_subtract_offset,
-	Rect, rect_width,
-	add_rect_coords, get_window_content_rect,
-)
-from id_eff import id_and_effects, run_id_eff, get_ids
-from imgui_widget import (window, group, child)
-from counter import *
-from counter_list import *
 
-from better_combo import str_combo_with_none, str_combo
+from id_eff import IdEff, id_and_effects, run_id_eff
+from imgui_widget import window
+
 
 from plot import (
 	initial_signal_plot_state, update_signal_plot,
@@ -42,15 +43,18 @@ from filter_box import (
 	initial_filter_box_state,
 	filter_box, update_filter_box,
 	FILTER_BOX_OUTPUT_SIGNAL_ID,
-	is_filter_box_disconnected, is_filter_box_connected,
+	# is_filter_box_disconnected,
+	is_filter_box_connected,
 	disconnect_filter_box, set_filter_box_input_signal_id, 
 )
 
-from files import *
-from eeg_signal import Signal
-# from multisignal import MultiSignal
+from files import (
+	example_file_path,
+	load_file, LOAD_FILE,
+	load_file_eff, LOAD_FILE_EFF,
+	handle_load_file
+)
 
-# from trans import Trans, TransChain
 
 DEFAULT_WINDOW_SIZE = (1280, 850)
 TARGET_FRAMERATE = 30.
@@ -62,10 +66,7 @@ current_id = 0
 
 @id_and_effects
 def initial_state() -> IdEff[PMap_[str, Any]]:
-	n_counters = 4
-	cos = [counter(id) for id in get_ids(n_counters)]
-	return m(counters=    pmap(   {co.id: co for co in cos}),
-			 counter_list=pvector([co.id     for co in cos])  )
+	return m()
 
 
 state, current_id, _ = run_id_eff(initial_state, id=current_id)()
@@ -74,18 +75,9 @@ state, current_id, _ = run_id_eff(initial_state, id=current_id)()
 
 @id_and_effects
 def update(state: PMap_[str, Any], action: Action) -> IdEff[PMap_[str, Any]]:
-	# state = { counters: {id: counter},
-	#           counter_list: [id]       }
-	if action.type in [ADD_COUNTER, REMOVE_COUNTER, CLEAR_COUNTERS]:
-		return update_counter_list(state, action)
 
-	elif action.type in [INCREMENT, DECREMENT, SET_VALUE]:
-		id = action.id
-		return state.transform(['counters', id],
-							   lambda counter: update_counter(counter, action))
-
-	elif action.type in [LOAD_FILE]:
-		emit_effect( load_file_eff(action.filename) )
+	if action.type in [LOAD_FILE]:
+		emit_effect( load_file_eff(action.filename) ) 
 		return state
 	else:
 		return state
@@ -170,7 +162,7 @@ def draw():
 
 	with window(name="signals"):
 		if im.button("load example"):
-			emit(load_file(example_file))
+			emit(load_file(example_file_path))
 
 
 		if len(data['signals']) > 0:
@@ -306,23 +298,24 @@ def main():
 		"""
 		Checks if the user sent any left-mouse mouse inputs, like moving/clicking the mouse
 		"""
-
+		nonlocal mouse_pos
 		nonlocal prev_mouse_pos
 		nonlocal prev_mouse_down_0
 		nonlocal prev_frame_click_0_finished
 
-		mouse_moved = (io.mouse_pos != prev_mouse_pos)
+		mouse_pos = io.mouse_pos
+		mouse_moved = (mouse_pos != prev_mouse_pos)
 		mouse_changed = io.mouse_down[0] != prev_mouse_down_0
 		click_0_finished = prev_mouse_down_0 and (not io.mouse_down[0]) # mouse was down previous frame, now it's up
 		# key_clicked = any(io.keys_down)
 		result =  mouse_moved or mouse_changed or io.mouse_down[0] or prev_frame_click_0_finished # or key_clicked
 
-		prev_mouse_pos = io.mouse_pos
+		prev_mouse_pos = mouse_pos
 		prev_mouse_down_0 = io.mouse_down[0]
 		prev_frame_click_0_finished = click_0_finished
 		return result
 
-	emit(load_file(example_file))
+	emit(load_file(example_file_path))
 	effects = update_state_with_actions()
 	clear_actions()
 	execute_effects(effects)
