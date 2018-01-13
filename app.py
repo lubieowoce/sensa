@@ -1,13 +1,7 @@
-# -*- coding: utf-8 -*-
-import glfw
-import OpenGL.GL as gl
+from imgui_glfw_app import run_imgui_glfw_app
 
-import imgui
 import imgui as im
-from imgui.integrations.glfw import GlfwRenderer
 
-from sys import exit
-from time import sleep
 from pyrsistent import m #, pmap, v, pvector)
 
 from typing import (
@@ -21,9 +15,10 @@ from types_util import (
 )
 
 from debug_util import (
+	debug_initialize,
 	debug_window,
 	debug_log, debug_log_dict,
-	debug_frame_ended,
+	debug_post_frame,
 )
 
 
@@ -55,21 +50,85 @@ from files import (
 	handle_load_file
 )
 
-
-DEFAULT_WINDOW_SIZE = (1280, 850)
-TARGET_FRAMERATE = 30.
+import flags
 
 
+window_title = "Sensa"
+initital_window_size = (1280, 850)
+target_framerate = 30.
 
-current_id = 0
+INITIAL_ACTIONS = [load_file(example_file_path)]
+
+
+
+
+current_id = None
+data = None
+state = None
+ui = None
+
+
+
+
+def sensa_app_init():
+	global current_id
+	global data
+	global state
+	global frame_actions
+	global ui
+
+	if flags.DEBUG:
+		debug_initialize()
+
+
+	data = {'signals':{}}
+	current_id = 0
+	
+	state, current_id, _ = run_id_eff(initial_state, id=current_id)()
+
+	actions_initialize()
+
+	ui = {
+
+		'plot_1': initial_signal_plot_state(),
+		'plot_2': initial_signal_plot_state(),
+
+
+		'filter_box': initial_filter_box_state(),
+
+
+		'settings': {
+			'plot_window_movable': False,
+			'numpy_resample': True,
+			'filter_slider_power': 3.0,
+		}
+	}
+
+	
+	for action in INITIAL_ACTIONS:
+		emit(action)
+	actions_post_frame()
+
+
+
+
+
+
+def sensa_post_frame():
+	actions_post_frame()
+
+	if flags.DEBUG:
+		debug_post_frame()
+		debug_window()
+
+
+
+
 
 
 @id_and_effects
 def initial_state() -> IdEff[PMap_[str, Any]]:
 	return m()
-
-
-state, current_id, _ = run_id_eff(initial_state, id=current_id)()
 
 
 
@@ -84,7 +143,6 @@ def update(state: PMap_[str, Any], action: Action) -> IdEff[PMap_[str, Any]]:
 
 
 
-data = {'signals':{}}
 
 def handle(data, command):
 	if command.type in [LOAD_FILE_EFF]:
@@ -93,7 +151,11 @@ def handle(data, command):
 
 
 
-frame_actions = [] # all the actions that happened during current frame
+frame_actions = None
+
+def actions_initialize():
+	global frame_actions
+	frame_actions = []
 
 def emit(action):
 	frame_actions.append(action)
@@ -119,35 +181,19 @@ def execute_effects(effects: List[Effect]) -> IO_[None]:
 		handle(data, eff)
 
 
+def actions_post_frame():
+	effects = update_state_with_actions()
+	execute_effects(effects)
+	clear_actions()
+
+
+
 
 # ==============================================
 
 
-ui = {
-
-	'plot_1': initial_signal_plot_state(),
-	'plot_2': initial_signal_plot_state(),
-
-
-	'filter_box': initial_filter_box_state(),
-
-
-	'settings': {
-		'plot_window_movable': False,
-		'numpy_resample': True,
-		'filter_slider_power': 3.0,
-	}
-}
-
-
-
-
 
 def draw():
-	"""
-	imgui.new_frame() is called right before `draw` in main.
-	imgui.render() is called `draw` returns.
-	"""
 	global state
 	global data
 	# state = { counters: {id: counter},
@@ -264,141 +310,17 @@ def draw():
 
 	debug_log_dict('ui', ui)
 	# debug_log_dict("ui['plot']", ui['plot'])
-	debug_frame_ended()
-	debug_window()
 
  	
-
-
-
 
 # ===================================================
 
 
-def main():
-
-	window = impl_glfw_init()
-	impl = GlfwRenderer(window)
-	io = imgui.get_io()
-
-	target_framerate = TARGET_FRAMERATE
-	max_frame_dur = 1/target_framerate
-
-	frame_start = 0.
-	frame_end = 0.
-	frame_dur = 0.
-	wait_dur = 0.
-
-	prev_mouse_pos = (0, 0)
-	mouse_pos = (0, 0)
-	prev_mouse_down_0 = False
-	prev_frame_click_0_finished = False
-
-	def got_input() -> bool:
-		"""
-		Checks if the user sent any left-mouse mouse inputs, like moving/clicking the mouse
-		"""
-		nonlocal mouse_pos
-		nonlocal prev_mouse_pos
-		nonlocal prev_mouse_down_0
-		nonlocal prev_frame_click_0_finished
-
-		mouse_pos = io.mouse_pos
-		mouse_moved = (mouse_pos != prev_mouse_pos)
-		mouse_changed = io.mouse_down[0] != prev_mouse_down_0
-		click_0_finished = prev_mouse_down_0 and (not io.mouse_down[0]) # mouse was down previous frame, now it's up
-		# key_clicked = any(io.keys_down)
-		result =  mouse_moved or mouse_changed or io.mouse_down[0] or prev_frame_click_0_finished # or key_clicked
-
-		prev_mouse_pos = mouse_pos
-		prev_mouse_down_0 = io.mouse_down[0]
-		prev_frame_click_0_finished = click_0_finished
-		return result
-
-	emit(load_file(example_file_path))
-	effects = update_state_with_actions()
-	clear_actions()
-	execute_effects(effects)
-
-	while not glfw.window_should_close(window):
-
-		frame_start = glfw.get_time() # seconds
-		debug_log("frame_start_ms", frame_start*1000) # miliseconds
-
-		glfw.poll_events()
-		impl.process_inputs()
-
-		got_inp = got_input()
-
-
-		if got_inp:
-			imgui.new_frame()
-	
-
-			draw() # defined above
-
-			effects = update_state_with_actions()
-			clear_actions()
-			execute_effects(effects)
-
-			gl.glClearColor(1., 1., 1., 1)
-			gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-
-			imgui.render()
-
-			glfw.swap_buffers(window)
-
-
-
-		
-
-		frame_end = glfw.get_time() # seconds
-		frame_dur = frame_end - frame_start
-		wait_dur = max_frame_dur - frame_dur
-		if wait_dur > 0:
-			sleep(wait_dur)
-
-
-
-	impl.shutdown()
-	imgui.shutdown()
-	glfw.terminate()
-
-
-
-
-def impl_glfw_init():
-	width, height = DEFAULT_WINDOW_SIZE
-	window_name = "minimal ImGui/GLFW3 example"
-
-	if not glfw.init():
-		print("Could not initialize OpenGL context")
-		exit(1)
-
-	# OS X supports only forward-compatible core profiles from 3.2
-	glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-	glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
-	glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-
-	glfw.window_hint(glfw.OPENGL_FORWARD_COMPAT, gl.GL_TRUE)
-
-	# Create a windowed mode window and its OpenGL context
-	window = glfw.create_window(
-		int(width), int(height), window_name, None, None
-	)
-	glfw.make_context_current(window)
-
-	if not window:
-		glfw.terminate()
-		print("Could not initialize Window")
-		exit(1)
-
-	return window
-
 
 if __name__ == "__main__":
-	main()
-
+	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw, post_frame=sensa_post_frame,
+					   target_framerate=target_framerate, window_title=window_title,
+					   window_size=initital_window_size)
 
 
 # if imgui.begin_main_menu_bar():

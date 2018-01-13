@@ -53,15 +53,19 @@ Range = lambda range_id: (range_start(range_id), range_end(range_id))
 TIME_N_POINTS_STORED = 10
 
 
+debug_dict = None
 
-debug_dict = OrderedDict(
-	range_duration_histories_ms={},
-	times_current_frame_ms=[],
+def debug_initialize():
+	global debug_dict
 
-	values=OrderedDict(),
-	dicts=OrderedDict(),
-	sequences=OrderedDict(),
-)
+	debug_dict = OrderedDict(
+		range_duration_histories_ms={},
+		times_current_frame_ms=[],
+
+		values=OrderedDict(),
+		dicts=OrderedDict(),
+		sequences=OrderedDict(),
+	)
 
 
 
@@ -150,7 +154,7 @@ def debug_window() -> IMGui[None]:
 
 
 
-def debug_frame_ended() -> Debug[None]:
+def debug_post_frame() -> Debug[None]:
 
 	times_current_frame_ms = debug_dict["times_current_frame_ms"]
 	range_duration_histories_ms = debug_dict['range_duration_histories_ms']
