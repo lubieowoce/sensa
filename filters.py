@@ -38,3 +38,9 @@ highpass_filter_sig = ['cutoff_freq']
 # highpass_filter : (Signal, float) -> float
 highpass_filter = part(simple_filter, type='high')
 make_highpass_tr = lambda: Trans('Highpass filter', highpass_filter, highpass_filter_sig, {'cutoff_freq': 0.05*Hz})
+
+
+available_filters = {
+	'lowpass': make_lowpass_tr,
+	'highpass': make_highpass_tr,
+}

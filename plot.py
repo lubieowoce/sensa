@@ -117,9 +117,9 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 
 
 
-def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui: Dict[str, Any], emit) -> IMGui[Rect]:
+def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui_settings: Dict[str, Any], emit) -> IMGui[Rect]:
 
-	PLOT_WINDOW_FLAGS = 0 if ui['plot_window_movable'] else im.WINDOW_NO_MOVE
+	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
 	with window(name=name, flags=PLOT_WINDOW_FLAGS):
 		content_top_left, content_bottom_right = get_window_content_rect()
@@ -148,12 +148,12 @@ def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
 
 
-		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui, emit)
+		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui_settings, emit)
 
 	return plot_draw_area
 
 
-def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, ui, emit) -> IMGui[None]:
+def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, ui_settings, emit) -> IMGui[None]:
 	assert_is_valid_plot(plot_state)
 	debug_log('plot_state', plot_state_type(plot_state))
 
@@ -165,10 +165,10 @@ def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot
 		signal_id = plot_state["signal_id"]
 		signal = signal_data[signal_id]
 
-		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui, emit)
+		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui_settings, emit)
 
 
-def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui: Dict[str, Any]) -> IO_[None]:
+def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui_settings) -> IO_[None]:
 	assert_is_valid_plot(plot_state)
 
 	if plot_state['signal_id_changed']:
@@ -308,7 +308,7 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 
-def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect,  draw_list, ui, emit) -> IMGui[None]:
+def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect,  draw_list, ui_settings, emit) -> IMGui[None]:
 	assert is_full_plot(plot_state)
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
@@ -397,7 +397,7 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 
 	if n_samples_in_range > n_points_in_plot:
 		assert n_points_in_plot == width_px
-		if ui['flags']['numpy_resample']:
+		if ui_settings['numpy_resample']:
 			point_times = np.linspace(start=0., stop=(len(signal.data)-1)*time_between_samples, num=len(signal.data)) 
 			sampled_times = np.linspace(start=start_t, stop=end_t, num=n_points_in_plot)
 			data_part = np.interp(x=sampled_times, xp=point_times, fp=signal.data)

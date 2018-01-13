@@ -14,7 +14,7 @@ def str_combo(name: str,
 	assert is_sequence_unique(options), "Duplicate options: {}".format(options)
 
 	cur_option_ix = options.index(current_option)
-	changed, selected_ix = im.combo("channel", cur_option_ix, options)
+	changed, selected_ix = im.combo(name, cur_option_ix, options)
 	assert selected_ix in range(len(options)), \
 		"Index ({ix}) not in list: {opts}, len={lo}" \
 		 .format(ix=selected_ix, opts=options, lo=len(options))

@@ -35,9 +35,11 @@ from plot import (
 	signal_plot_window,
 	is_empty_plot, is_full_plot,
 	select_plot_signal, set_plot_time_range,
+	set_plot_empty,
 )
 
 from filter_box import (
+	initial_filter_box_state,
 	filter_box, update_filter_box,
 	FILTER_BOX_OUTPUT_SIGNAL_ID,
 	is_filter_box_disconnected, is_filter_box_connected,
@@ -47,11 +49,12 @@ from filter_box import (
 from files import *
 from eeg_signal import Signal
 # from multisignal import MultiSignal
-from filters import (
-    make_lowpass_tr,
-)
-    # highpass_filter, make_highpass_tr
+
 # from trans import Trans, TransChain
+
+DEFAULT_WINDOW_SIZE = (1280, 850)
+TARGET_FRAMERATE = 30.
+
 
 
 current_id = 0
@@ -129,22 +132,18 @@ def execute_effects(effects: List[Effect]) -> IO_[None]:
 
 
 ui = {
-	'plot_window_movable': False,
 
 	'plot_1': initial_signal_plot_state(),
 	'plot_2': initial_signal_plot_state(),
 
 
-	'filter_box': {
-		'input_signal_id': None,
-		'input_signal_id_changed': True,
-		'trans': make_lowpass_tr(),
-		'param_value_changed': False,
-	},
+	'filter_box': initial_filter_box_state(),
 
 
-	'flags': {
-		'numpy_resample': False,
+	'settings': {
+		'plot_window_movable': False,
+		'numpy_resample': True,
+		'filter_slider_power': 3.0,
 	}
 }
 
@@ -167,19 +166,11 @@ def draw():
 
 	im.show_metrics_window()
 
+	# ------------------------
 
 	with window(name="signals"):
 		if im.button("load example"):
 			emit(load_file(example_file))
-
-		im.same_line()
-		changed, move = im.checkbox("move plots", ui['plot_window_movable'])
-		if changed:
-			ui['plot_window_movable'] = move
-		im.same_line()
-		changed, val = im.checkbox("numpy resample", ui['flags']['numpy_resample'])
-		if changed:
-			ui['flags']['numpy_resample'] = val
 
 
 		if len(data['signals']) > 0:
@@ -198,6 +189,29 @@ def draw():
 			im.text("No signals loaded")
 
 
+	# -------------------------
+
+	with window(name="settings"):
+		ui_settings = ui['settings']
+		changed, move = im.checkbox("move plots", ui_settings['plot_window_movable'])
+		if changed:
+			ui_settings['plot_window_movable'] = move
+
+		im.same_line()
+
+		changed, val = im.checkbox("numpy resample", ui_settings['numpy_resample'])
+		if changed:
+			ui_settings['numpy_resample'] = val
+
+
+		changed, val = im.slider_float('filter_slider_power', ui_settings['filter_slider_power'],
+									   min_value=1., max_value=5.,
+									   power=1.0)
+		if changed:
+			ui_settings['filter_slider_power'] = val
+
+
+	# ----------------------------
 
 	# 'filter_box': {
 	# 	'input_signal_id': None,
@@ -210,8 +224,8 @@ def draw():
 
 
 	# signal plot 1
-	ui['plot_rect_1'] = signal_plot_window("view (drag to scroll)##1", ui['plot_1'], data['signals'], ui=ui, emit=emit)
-	update_signal_plot(ui['plot_1'], data['signals'], ui['plot_rect_1'], ui=ui)
+	ui['plot_rect_1'] = signal_plot_window("view (drag to scroll)##1", ui['plot_1'], data['signals'], ui_settings=ui['settings'], emit=emit)
+	update_signal_plot(ui['plot_1'], data['signals'], ui['plot_rect_1'], ui_settings=ui['settings'])
 
 
 
@@ -228,7 +242,7 @@ def draw():
 		filter_box_state['input_signal_id_changed'] = False
 	# END DEMO
 
-	filter_box(filter_box_state, data['signals'])
+	filter_box(filter_box_state, data['signals'], ui_settings=ui['settings'])
 	update_filter_box(filter_box_state, data['signals'])
 
 
@@ -240,6 +254,8 @@ def draw():
 	# plot 2 should display the output of filter box
 	if FILTER_BOX_OUTPUT_SIGNAL_ID in data['signals'] and is_empty_plot(ui['plot_2']):
 		select_plot_signal(ui['plot_2'], FILTER_BOX_OUTPUT_SIGNAL_ID)
+	elif FILTER_BOX_OUTPUT_SIGNAL_ID not in data['signals']:
+		set_plot_empty(ui['plot_2'])
 
 	# plot 2 should have the same time range as plot 1
 	if is_full_plot(ui['plot_1']) and is_full_plot(ui['plot_2']):
@@ -247,8 +263,8 @@ def draw():
 		
 	# END DEMO
 
-	ui['plot_rect_2'] = signal_plot_window("view (drag to scroll)##2", ui['plot_2'], data['signals'], ui=ui, emit=emit)
-	update_signal_plot(ui['plot_2'], data['signals'], ui['plot_rect_2'], ui=ui)
+	ui['plot_rect_2'] = signal_plot_window("view (drag to scroll)##2", ui['plot_2'], data['signals'], ui_settings=ui['settings'], emit=emit)
+	update_signal_plot(ui['plot_2'], data['signals'], ui['plot_rect_2'], ui_settings=ui['settings'])
 
 
 	debug_log_dict('ui', ui)
@@ -270,7 +286,7 @@ def main():
 	impl = GlfwRenderer(window)
 	io = imgui.get_io()
 
-	target_framerate = 30.
+	target_framerate = TARGET_FRAMERATE
 	max_frame_dur = 1/target_framerate
 
 	frame_start = 0.
@@ -356,7 +372,7 @@ def main():
 
 
 def impl_glfw_init():
-	width, height = 1280, 720
+	width, height = DEFAULT_WINDOW_SIZE
 	window_name = "minimal ImGui/GLFW3 example"
 
 	if not glfw.init():
