@@ -1,4 +1,4 @@
-from redux_imgui_glfw_app import run_redux_imgui_glfw_app
+from imgui_glfw_app import run_imgui_glfw_app
 
 import imgui as im
 
@@ -62,14 +62,19 @@ INITIAL_ACTIONS = [load_file(example_file_path)]
 
 
 
-data = object()
-ui = object()
+current_id = None
+data = None
+state = None
+ui = None
 
 
 
 
 def sensa_app_init():
+	global current_id
 	global data
+	global state
+	global frame_actions
 	global ui
 
 	if flags.DEBUG:
@@ -77,8 +82,11 @@ def sensa_app_init():
 
 
 	data = {'signals':{}}
+	current_id = 0
 	
-	
+	state, current_id, _ = run_id_eff(initial_state, id=current_id)()
+
+	actions_initialize()
 
 	ui = {
 
@@ -97,10 +105,17 @@ def sensa_app_init():
 	}
 
 	
-	
+	for action in INITIAL_ACTIONS:
+		emit(action)
+	actions_post_frame()
+
+
+
+
 
 
 def sensa_post_frame():
+	actions_post_frame()
 
 	if flags.DEBUG:
 		debug_post_frame()
@@ -109,8 +124,10 @@ def sensa_post_frame():
 
 
 
+
+
 @id_and_effects
-def sensa_get_initial_state() -> IdEff[PMap_[str, Any]]:
+def initial_state() -> IdEff[PMap_[str, Any]]:
 	return m()
 
 
@@ -133,15 +150,56 @@ def handle(data, command):
 
 
 
+
+frame_actions = None
+
+def actions_initialize():
+	global frame_actions
+	frame_actions = []
+
+def emit(action):
+	frame_actions.append(action)
+
+def clear_actions():
+	frame_actions.clear()
+
+
+def update_state_with_actions() -> List[Effect]:
+	global state
+	global frame_actions
+	global current_id
+
+	all_effects = []
+	for act in frame_actions:
+		state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
+		all_effects.extend(effects)
+	return all_effects
+
+
+def execute_effects(effects: List[Effect]) -> IO_[None]:
+	for eff in effects:
+		handle(data, eff)
+
+
+def actions_post_frame():
+	effects = update_state_with_actions()
+	execute_effects(effects)
+	clear_actions()
+
+
+
+
 # ==============================================
 
 
 
-def draw(state, emit):
+def draw():
+	global state
 	global data
 	# state = { counters: {id: counter},
 	#           counter_list: [id]       }
 
+	assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
 
 
 	im.show_metrics_window()
@@ -260,40 +318,9 @@ def draw(state, emit):
 
 
 if __name__ == "__main__":
-	# run_imgui_glfw_app(app_init=sensa_app_init, draw=draw, post_frame=sensa_post_frame,
-	# 				   target_framerate=target_framerate, window_title=window_title,
-	# 				   window_size=initital_window_size)
-	run_redux_imgui_glfw_app(update=update,
-							 get_initial_state=sensa_get_initial_state,
-							 initial_actions=INITIAL_ACTIONS,
-
-							 handle=handle,
-							 get_data=(lambda: data),
-
-							 app_init=sensa_app_init,
-							 draw=draw,
-							 post_frame=sensa_post_frame,
-
-					   		 window_title=window_title,
-					   		 window_size=initital_window_size,
-					   		 target_framerate=target_framerate)
-
-# def run_redux_imgui_glfw_app(get_initial_state: Fun[[None], IdEff[A]],
-# 							 update: Fun[[A, Action], A],
-# 							 handle: Fun[[B, Effect], None],
-# 							 data: IO_[B],
-# 							 draw: Fun[  [Fun[[Action], IO_[None]]],  IO_[None] ] ,
-# 							 initial_actions: Sequence[Action] = NoInitialActions,
-# 							 post_frame=None,
-# 							 app_shutdown=None,
-# 							 # should_update,
-# 							 window_title: str = DEFAULT_WINDOW_TITLE,
-# 							 window_size=DEFAULT_WINDOW_SIZE,
-# 							 # pause_on_no_input: bool = DEFAULT_PAUSE_ON_NO_INPUT,
-# 							 target_framerate: float = DEFAULT_TARGET_FRAMERATE) -> None:
-
-
-
+	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw, post_frame=sensa_post_frame,
+					   target_framerate=target_framerate, window_title=window_title,
+					   window_size=initital_window_size)
 
 
 # if imgui.begin_main_menu_bar():
