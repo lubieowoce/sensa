@@ -24,6 +24,7 @@ class PVector_(Generic[A]):
 
 class IO_(Generic[A]):
 	pass
+Actions = IO_
 
 class OrderedDict_(Generic[K, A]):
 	pass

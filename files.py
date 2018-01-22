@@ -7,6 +7,8 @@ from types_util import (
 	PMap_,
 	IO_,
 )
+from sensa_util import impossible
+from uniontype import union
 
 from pyrsistent import m
 
@@ -14,18 +16,34 @@ from eeg_signal import Signal
 from read_edf import read_edf
 
 
+FileEffect, \
+	Load_, \
+= union(
+'FileEff', [
+	('Load', [('filename', str)]),
+]
+)
 
-LOAD_FILE = "LOAD_FILE"
-LOAD_FILE_EFF = "LOAD_FILE_EFF"
 
-load_file     = lambda filename: m(type=LOAD_FILE, filename=filename)
-load_file_eff = lambda filename: m(type=LOAD_FILE_EFF, filename=filename)
+FileAction, \
+	Load, \
+= union(
+'FileAction', [
+	('Load', [('filename', str)]),
+]
+)
 
 
 
-def handle_load_file(signals: Dict[str, Signal], command: PMap_[str, Any]) -> IO_[None]:
-	new_signals = load_edf(command.filename)
-	signals.update(new_signals)
+
+
+def handle_file_effect(signals: PMap_[str, Signal], command: FileEffect) -> IO_[PMap_[str, Signal]]:
+	if command.is_Load():
+		new_signals = load_edf(command.filename)
+		return signals.update(new_signals)
+	else:
+		impossible("Invalid File command:" + command)
+		return signals
 
 
 def load_edf(filename: str) -> IO_[Dict[str, Signal]]:

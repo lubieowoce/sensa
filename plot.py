@@ -6,15 +6,17 @@ from typing import (
 	List, Dict, 
 )
 from types_util import (
+	PMap_, PVector_,
+	Id,
 	NDArray,
-	IO_, IMGui
+	IO_, IMGui, Actions,
 )
 
 from imgui_widget import window
 from better_combo import str_combo_with_none
 
 from debug_util import (
-	debug_log, debug_log_time, debug_log_dict,
+	debug_log, debug_log_time, #debug_log_dict,
 	Range
 )
 
@@ -28,7 +30,8 @@ from sensa_util import (
 
 	get_mouse_position, get_window_content_rect,
 	range_incl,
-	one_is_true_of,
+	# one_is_true_of,
+	impossible, bad_action,
 )
 
 from time_range import (
@@ -40,8 +43,8 @@ from eeg_signal import Signal
 
 import math
 import numpy as np
-
-
+# from pyrsistent import (m, pmap, v, pvector,)
+from uniontype import union
 
 # Signal:
 # 	  data,
@@ -54,68 +57,171 @@ import numpy as np
 # 	  info
 
 
+SignalId = str
 
-def is_empty_plot(plot_state: Dict[str, Any]) -> bool:
-	return plot_state['signal_id'] == None and plot_state['time_range'] == None
-
-def is_freshly_selected_plot(plot_state: Dict[str, Any]) -> bool:
-	return plot_state['signal_id'] != None and plot_state['time_range'] == None
-
-def is_full_plot(plot_state: Dict[str, Any]) -> bool:
-	return plot_state['signal_id'] != None and plot_state['time_range'] != None
-
-
-def plot_state_type(plot_state: Dict[str, Any]) -> str:
-	assert_is_valid_plot(plot_state)
-	states = {
-		'empty': is_empty_plot,
-	 	'freshly_selected': is_freshly_selected_plot,
-	 	'full': is_full_plot
-	}
-	for state, pred in states.items():
-		if pred(plot_state):
-			return state
-
-
-def assert_is_valid_plot(plot_state: Dict[str, Any]):
-	assert one_is_true_of(plot_state, [is_empty_plot,
-									   is_freshly_selected_plot,
-									   is_full_plot]), \
-	"Plot is in invalid state: {}".format(plot_state)
+DragState, \
+	NotDragging, \
+	Dragging, \
+= union(
+'DragState', [
+	('NotDragging', [ ]),
+	('Dragging', 	[('time_range_before_drag', TimeRange)]),
+]
+)
 
 
 
-def initial_signal_plot_state() -> Dict[str, Any]:
-	return \
-		{
-			'signal_id': None,
-			'time_range': None,
+PlotState, \
+	Empty, \
+	Full, \
+= union(
+'PlotState', [
+	('Empty', 			[('id_', Id),
+						 ('draw_area', Rect)]), # bit of a kludge
 
-			'signal_id_changed': False,
-			'time_range_changed': False,
+	# ('FreshlySelected', [('id_', Id),
+	# 					 ('signal_id', SignalId)]),
 
-			'dragging_plot': False,
-			'time_range_before_drag': None,
-		}
-assert is_empty_plot(initial_signal_plot_state())
+	('Full', 			[('id_', Id),
+						 ('draw_area', Rect),   # bit of a kludge
+						 ('signal_id', SignalId),
+						 ('time_range', TimeRange),
+						 ('drag_state', DragState)]),
+]
+)
 
 
 
-def set_plot_empty(plot_state: Dict[str, Any]) -> IO_[None]:
-	plot_state['signal_id'] = None
-	plot_state['signal_id_changed'] = True
-	plot_state['time_range'] = None
-	assert is_empty_plot(plot_state)
+def initial_signal_plot_state(id_: Id) -> PlotState:
+	return PlotState.Empty(id_=id_, draw_area=Rect(Vec2(0,0), Vec2(10, 10)))
 
-def select_plot_signal(plot_state: Dict[str, Any], signal_id: str) -> IO_[None]:
-	plot_state['signal_id'] = signal_id
-	plot_state['signal_id_changed'] = True
-	plot_state['time_range'] = None
-	assert is_freshly_selected_plot(plot_state)
 
-def set_plot_time_range(plot_state: Dict[str, Any], time_range: TimeRange) -> IO_[None]:
-	plot_state['time_range'] = time_range
-	plot_state['time_range_changed'] = True
+
+PlotAction, \
+	SetEmpty, \
+	SelectSignal, \
+	SetTimeRange, \
+	StartDrag, \
+	EndDrag, \
+	SetDrawArea, \
+= union(
+'PlotAction', [
+	('SetEmpty',	 [('id_', Id)]), 
+
+	('SelectSignal', [('id_', Id),
+					  ('signal_id',  SignalId) ]), 
+
+	('SetTimeRange', [('id_', Id),
+					  ('time_range', TimeRange)]), 
+
+	('StartDrag',	 [('id_', Id)]),
+
+	('EndDrag', 	 [('id_', Id)]),
+
+	('SetDrawArea',  [('id_', Id),
+					  ('draw_area', Rect)]), # bit of a kludge
+]
+)
+
+
+
+def update_plot(plot_state: PlotState,
+				signal_data: PMap_[SignalId, Signal],
+				action: PlotAction) -> PlotState:
+
+	assert plot_state.id_ == action.id_, \
+		"Update function for plot\{id={this_id}\}got an action meant for plot with id={action_id}" \
+		.format(this_id=plot_state.id_, action_id=action.id_)
+
+
+	if   action.is_SetEmpty():
+		return Empty(id_=plot_state.id_, draw_area=plot_state.draw_area)
+
+
+	elif action.is_SelectSignal():
+
+		# compute the default time range
+		new_signal_id = action.signal_id
+		new_signal = signal_data[new_signal_id]
+		plot_draw_area = plot_state.draw_area
+		width_px  = int(rect_width(plot_draw_area))
+
+		max_t = (len(new_signal.data)-1) * new_signal.time_between_samples
+		default_end_t = limit_upper(  width_px * new_signal.time_between_samples  , high=max_t)
+		default_time_range = TimeRange(0.0, default_end_t)
+
+		return Full(id_=plot_state.id_,
+					signal_id=new_signal_id,
+					time_range=default_time_range,
+					draw_area=plot_draw_area,
+					drag_state=NotDragging())
+
+
+	elif action.is_SetTimeRange():
+
+		if plot_state.is_Empty(): 
+			bad_action(msg="Cannot set time range of empty plot: " + plot_state)
+			return plot_state
+
+		if plot_state.is_Full():
+			# maybe clamp the time_range here?
+			return plot_state.set(time_range=action.time_range)
+
+		
+
+
+	elif action.is_StartDrag():
+
+		if plot_state.is_Empty():
+			bad_action(msg="Cannot drag an empty plot " + plot_state)
+			return plot_state
+
+		elif plot_state.is_Full():
+			drag_state = plot_state .drag_state
+			time_range = plot_state .time_range
+
+			if drag_state.is_NotDragging():
+				return plot_state.set(drag_state=Dragging(time_range_before_drag=time_range))
+			elif drag_state.is_Dragging():
+				bad_action(msg="Is already dragging: cannot start dragging in state " + plot_state)
+				return plot_state
+
+		else:
+			impossible("Invalid plot state:" + plot_state)
+
+
+
+	elif action.is_EndDrag():
+
+		if plot_state.is_Empty():
+			bad_action(msg="Cannot stop dragging an empty plot - it shouldn't be dragged in the first place. " + plot_state)
+			return plot_state
+
+		elif plot_state.is_Full():
+			drag_state = plot_state .drag_state
+
+			if drag_state.is_NotDragging():
+				bad_action("Is already dragging: cannot start dragging in state " + plot_state)
+				return plot_state
+
+			elif drag_state.is_Dragging():
+				return plot_state.set(drag_state=NotDragging())
+
+		else:
+			impossible("Invalid plot state:" + plot_state)
+			
+
+
+	elif action.is_SetDrawArea():
+		return plot_state.set(draw_area=action.draw_area)
+
+
+
+	else:
+		impossible("Action is not a valid PlotAction: "+action)
+
+
+
 
 white = (1.0, 1.0, 1.0, 1)
 
@@ -131,12 +237,23 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 
 
 
-
-def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[str, Signal], ui_settings: Dict[str, Any], emit) -> IMGui[Rect]:
+def signal_plot_window(
+	plot_state: Dict[str, Any],
+	signal_data: Dict[str, Signal],
+	ui_settings: Dict[str, Any], emit) -> IMGui[None]:
 
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
-	with window(name=name, flags=PLOT_WINDOW_FLAGS):
+	if plot_state.is_Empty():
+		plot_name = "No signal##{id}".format(id=plot_state.id_)
+	elif plot_state.is_Full():
+		plot_name = "Signal {sig_id} (drag to scroll)##{id}" \
+			.format(sig_id=plot_state.signal_id, id=plot_state.id_)
+	else:
+		impossible("Invalid plot state: "+plot_state)
+
+
+	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
 		content_top_left, content_bottom_right = get_window_content_rect()
 		draw_list = im.get_window_draw_list()
 
@@ -144,15 +261,16 @@ def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[
 		if len(signal_data) > 0:
 			signal_ids =  sorted(signal_data.keys())
 			debug_log('signal_ids', signal_ids)
-			changed, o_selected_signal_id = str_combo_with_none("channel", plot_state['signal_id'], signal_ids)
+
+			prev_o_selected_signal_id = None if plot_state.is_Empty() else plot_state.signal_id
+
+			changed, o_selected_signal_id = str_combo_with_none("channel", prev_o_selected_signal_id, signal_ids)
 			if changed:
 				if o_selected_signal_id != None:
 					selected_signal_id = o_selected_signal_id
-					select_plot_signal(plot_state, selected_signal_id)
+					emit( SelectSignal(id_=plot_state.id_, signal_id=selected_signal_id) )
 				else:
-					set_plot_empty(plot_state)
-			else:
-				plot_state['signal_id_changed'] = False
+					emit( SetEmpty(id_=plot_state.id_) )
 		else:
 			im.text("No signals loaded")
 
@@ -164,60 +282,64 @@ def signal_plot_window(name: str, plot_state: Dict[str, Any], signal_data: Dict[
 		
 		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
+		emit( SetDrawArea(id_=plot_state.id_, draw_area=plot_draw_area) )
+
+		# signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui_settings=ui_settings, emit=emit)
+		signal_plot(plot_state, signal_data, draw_list,
+					ui_settings=ui_settings, emit=emit)
+
+		plot_react_to_drag(plot_state, signal_data, plot_draw_area,
+						   ui_settings=ui_settings, emit=emit)
 
 
-		signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui_settings, emit)
 
-	return plot_draw_area
+# def signal_plot(plot_state: PlotState,
+# 				signal_data: PMap_[SignalId, Signal],
+# 				plot_draw_area: Rect,
+# 				draw_list, ui_settings, emit) -> IMGui[None]:
 
+def signal_plot(plot_state: PlotState,
+				signal_data: PMap_[SignalId, Signal],
+				draw_list, ui_settings, emit) -> IMGui[None]:
 
-def signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, draw_list, ui_settings, emit) -> IMGui[None]:
-	assert_is_valid_plot(plot_state)
-	debug_log('plot_state', plot_state_type(plot_state))
+	debug_log('plot_state', plot_state.get_variant_name())
 
-	if is_empty_plot(plot_state):
+	plot_draw_area = plot_state.draw_area
+
+	if plot_state.is_Empty():
 		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
-	elif is_freshly_selected_plot(plot_state):
-		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
-	else: # is_full_plot(plot_state)
-		signal_id = plot_state["signal_id"]
+
+
+	elif plot_state.is_Full():
+		signal_id = plot_state.signal_id
 		signal = signal_data[signal_id]
 
 		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui_settings, emit)
 
+	else:
+		impossible("Invalid plot state: "+plot_state)
 
-def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal], plot_draw_area: Rect, ui_settings) -> IO_[None]:
-	assert_is_valid_plot(plot_state)
 
-	if plot_state['signal_id_changed']:
 
-		o_signal_id = plot_state['signal_id']
-		if o_signal_id == None:
-			set_plot_empty(plot_state)
-		else:
-			signal_id = o_signal_id
-			select_plot_signal(plot_state, signal_id)
+def plot_react_to_drag(plot_state: PlotState, signal_data: PMap_[str, Signal], plot_draw_area: Rect, ui_settings, emit) -> Actions[None]:
+	# assert_is_valid_plot(plot_state)
 
-	if is_empty_plot(plot_state):
+
+	if plot_state.is_Empty():
 		return
 
+	assert plot_state.is_Full()
 
 	width_px  = int(rect_width(plot_draw_area))
 
-	signal_id = plot_state["signal_id"]
+	signal_id = plot_state.signal_id
 	signal = signal_data[signal_id]
 
 	time_between_samples = signal.sampling_interval
-	max_t = (len(signal.data)-1) * time_between_samples
-
-	if is_freshly_selected_plot(plot_state):
-		default_end_t = limit_upper(  width_px * signal.sampling_interval  , high=max_t)
-		set_plot_time_range(plot_state, TimeRange(0.0, default_end_t))
+	max_t = (len(signal.data)-1) * time_between_samples	
 	
+	time_range = plot_state.time_range
 
-	assert is_full_plot(plot_state)
-	
-	time_range = plot_state["time_range"]
 
 	top_left, bottom_right = plot_draw_area
 	# height_px = int(rect_height(plot_draw_area))
@@ -237,17 +359,23 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 	# crude dragging state machine
 	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
 
-	if not plot_state['dragging_plot'] \
-		and im.is_mouse_dragging(button=0) \
-		and is_in_rect(drag_origin, plot_draw_area):
+	if (plot_state.drag_state.is_NotDragging() 
+		and im.is_mouse_dragging(button=0) 
+		and is_in_rect(drag_origin, plot_draw_area)
+	   ):
 		# just begun dragging
-		plot_state['dragging_plot'] = True
-		plot_state['time_range_before_drag'] = time_range
+		emit( StartDrag(id_=plot_state.id_) )
 		
-	if plot_state['dragging_plot'] and not im.is_mouse_dragging(button=0):
+	if (plot_state.drag_state.is_Dragging() 
+		and not im.is_mouse_dragging(button=0)
+	   ):
 		# just ended dragging
-		plot_state['dragging_plot'] = False
-		plot_state['time_range_before_drag'] = None
+		emit( EndDrag(id_=plot_state.id_) )
+		return
+		# ^ Return early - imgui already thinks the drag has ended,
+		# and im.get_mouse_drag_delta() will return (-1, -1), so the plot
+		# will get updated badly.
+
 	# end dragging state machine
 
 
@@ -260,9 +388,9 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 	# DRAGGING
 
 
-	if plot_state['dragging_plot']:
+	if plot_state.drag_state.is_Dragging():
 
-		time_range_before_drag = plot_state['time_range_before_drag']
+		time_range_before_drag = plot_state .drag_state .time_range_before_drag
 		mouse_drag_delta = im.get_mouse_drag_delta()
 
 		updated_time_range = time_range_before_drag
@@ -313,11 +441,8 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 	# UPDATE THE TIME RANGE based on input
-	if plot_state['time_range'] != updated_time_range:
-		set_plot_time_range(plot_state, updated_time_range)
-	else:
-		plot_state['time_range_changed'] = False
-	
+	if plot_state.time_range != updated_time_range:
+		emit( SetTimeRange(id_=plot_state.id_, time_range=updated_time_range)  )
 
 
 	# END OF HANDLING USER INPUT
@@ -327,7 +452,7 @@ def update_signal_plot(plot_state: Dict[str, Any], signal_data: Dict[str, Signal
 
 
 def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect,  draw_list, ui_settings, emit) -> IMGui[None]:
-	assert is_full_plot(plot_state)
+	assert plot_state.is_Full()
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
 
@@ -350,8 +475,8 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 
 	# INPUT HANDLING USED TO BE HERE
 
-	debug_log_dict("plot", plot_state)
-	time_range = plot_state['time_range']
+	# debug_log_dict("plot", plot_state)
+	time_range = plot_state .time_range
 	start_t, end_t = time_range
 	assert 0. <= start_t < end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
 										    .format(start_t, end_t, 0., max_t)
@@ -487,7 +612,7 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 	# END OF THE SIGNAL PLOT
 
 	# draw a line at drag location
-	if plot_state['dragging_plot']:
+	if plot_state .drag_state .is_Dragging():
 		mouse_x, _ = get_mouse_position()
 		draw_list.add_line(Vec2(mouse_x, bottom_y), Vec2(mouse_x, top_y), color=white)
 
@@ -503,7 +628,7 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 
 
 def show_empty_plot(plot_state: Dict[str, Any], plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
-	# assert is_empty_plot(plot_state)
+	assert plot_state.is_Empty()
 	# BOX AROUND PLOT
 	gray = (0.8, 0.8, 0.8, 1)
 	add_rect(draw_list, plot_draw_area, gray)

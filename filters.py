@@ -36,17 +36,24 @@ def simple_filter(signal: Signal, cutoff_freq: float, type: str) -> Signal:
 	# 		so the new info could be incorrect
 
 lowpass_filter_sig = ['cutoff_freq']
+lowpass_default_params = {'cutoff_freq': 10*Hz}
 # lowpass_filter : (Signal, cutoff_freq: float) -> float
 lowpass_filter = part(simple_filter, type='low')
-make_lowpass_tr = lambda: Trans('Lowpass filter', lowpass_filter, lowpass_filter_sig, {'cutoff_freq': 10*Hz})
+lowpass_tr = Trans('Lowpass filter', lowpass_filter, lowpass_filter_sig, )
 
 highpass_filter_sig = ['cutoff_freq']
+highpass_default_params = {'cutoff_freq': 0.05*Hz}
 # highpass_filter : (Signal, float) -> float
 highpass_filter = part(simple_filter, type='high')
-make_highpass_tr = lambda: Trans('Highpass filter', highpass_filter, highpass_filter_sig, {'cutoff_freq': 0.05*Hz})
+highpass_tr = Trans('Highpass filter', highpass_filter, highpass_filter_sig)
 
 
 available_filters = {
-	'lowpass': make_lowpass_tr,
-	'highpass': make_highpass_tr,
+	'lowpass':  lowpass_tr,
+	'highpass': highpass_tr,
+}
+
+default_parameters = {
+	'lowpass': lowpass_default_params,
+	'highpass': highpass_default_params,
 }
