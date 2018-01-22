@@ -38,7 +38,7 @@ Similar to Windows, but right now the Pipfile is set up to install a numpy binar
 
 ## Run
 ```
-> pipenv run python gui_glfw.py
+> pipenv run python app.py
 ```
 
 ## Shell
