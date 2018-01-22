@@ -354,6 +354,7 @@ def draw():
 	
 	# signal plot 1
 	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals, ui_settings=ui['settings'], emit=emit)
+	# signal plot 2
 	signal_plot_window(state.plots[PLOT_2_ID], state.data.signals, ui_settings=ui['settings'], emit=emit)
 
 

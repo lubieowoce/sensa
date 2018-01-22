@@ -6,10 +6,10 @@ from typing import (
 	List, Dict, 
 )
 from types_util import (
-	PMap_, PVector_,
+	PMap_, # PVector_,
 	Id,
 	NDArray,
-	IO_, IMGui, Actions,
+	IMGui, Actions,
 )
 
 from imgui_widget import window
@@ -30,7 +30,6 @@ from sensa_util import (
 
 	get_mouse_position, get_window_content_rect,
 	range_incl,
-	# one_is_true_of,
 	impossible, bad_action,
 )
 
@@ -59,6 +58,7 @@ from uniontype import union
 
 SignalId = str
 
+
 DragState, \
 	NotDragging, \
 	Dragging, \
@@ -76,14 +76,10 @@ PlotState, \
 	Full, \
 = union(
 'PlotState', [
-	('Empty', 			[('id_', Id),
-						 ('draw_area', Rect)]), # bit of a kludge
+	('Empty', 			[('id_', Id)]),
 
-	# ('FreshlySelected', [('id_', Id),
-	# 					 ('signal_id', SignalId)]),
 
 	('Full', 			[('id_', Id),
-						 ('draw_area', Rect),   # bit of a kludge
 						 ('signal_id', SignalId),
 						 ('time_range', TimeRange),
 						 ('drag_state', DragState)]),
@@ -93,7 +89,7 @@ PlotState, \
 
 
 def initial_signal_plot_state(id_: Id) -> PlotState:
-	return PlotState.Empty(id_=id_, draw_area=Rect(Vec2(0,0), Vec2(10, 10)))
+	return PlotState.Empty(id_=id_)
 
 
 
@@ -103,7 +99,6 @@ PlotAction, \
 	SetTimeRange, \
 	StartDrag, \
 	EndDrag, \
-	SetDrawArea, \
 = union(
 'PlotAction', [
 	('SetEmpty',	 [('id_', Id)]), 
@@ -118,10 +113,12 @@ PlotAction, \
 
 	('EndDrag', 	 [('id_', Id)]),
 
-	('SetDrawArea',  [('id_', Id),
-					  ('draw_area', Rect)]), # bit of a kludge
 ]
 )
+
+
+INITIAL_VIEW_SAMPLES_N = 800
+
 
 
 
@@ -135,7 +132,7 @@ def update_plot(plot_state: PlotState,
 
 
 	if   action.is_SetEmpty():
-		return Empty(id_=plot_state.id_, draw_area=plot_state.draw_area)
+		return Empty(id_=plot_state.id_)
 
 
 	elif action.is_SelectSignal():
@@ -143,17 +140,14 @@ def update_plot(plot_state: PlotState,
 		# compute the default time range
 		new_signal_id = action.signal_id
 		new_signal = signal_data[new_signal_id]
-		plot_draw_area = plot_state.draw_area
-		width_px  = int(rect_width(plot_draw_area))
 
 		max_t = (len(new_signal.data)-1) * new_signal.time_between_samples
-		default_end_t = limit_upper(  width_px * new_signal.time_between_samples  , high=max_t)
+		default_end_t = limit_upper(  INITIAL_VIEW_SAMPLES_N * new_signal.time_between_samples  , high=max_t)
 		default_time_range = TimeRange(0.0, default_end_t)
 
 		return Full(id_=plot_state.id_,
 					signal_id=new_signal_id,
 					time_range=default_time_range,
-					draw_area=plot_draw_area,
 					drag_state=NotDragging())
 
 
@@ -209,11 +203,6 @@ def update_plot(plot_state: PlotState,
 
 		else:
 			impossible("Invalid plot state:" + plot_state)
-			
-
-
-	elif action.is_SetDrawArea():
-		return plot_state.set(draw_area=action.draw_area)
 
 
 
@@ -244,14 +233,14 @@ def signal_plot_window(
 
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
-	if plot_state.is_Empty():
-		plot_name = "No signal##{id}".format(id=plot_state.id_)
-	elif plot_state.is_Full():
-		plot_name = "Signal {sig_id} (drag to scroll)##{id}" \
-			.format(sig_id=plot_state.signal_id, id=plot_state.id_)
-	else:
-		impossible("Invalid plot state: "+plot_state)
-
+	# if plot_state.is_Empty():
+	# 	plot_name = "No signal##{id}".format(id=plot_state.id_)
+	# elif plot_state.is_Full():
+	# 	plot_name = "Signal {sig_id} (drag to scroll)##{id}" \
+	# 		.format(sig_id=plot_state.signal_id, id=plot_state.id_)
+	# else:
+	# 	impossible("Invalid plot state: "+plot_state)
+	plot_name = "Plot (id={id})".format(id=plot_state.id_)
 
 	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
 		content_top_left, content_bottom_right = get_window_content_rect()
@@ -282,10 +271,8 @@ def signal_plot_window(
 		
 		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
-		emit( SetDrawArea(id_=plot_state.id_, draw_area=plot_draw_area) )
 
-		# signal_plot(plot_state, signal_data, plot_draw_area, draw_list, ui_settings=ui_settings, emit=emit)
-		signal_plot(plot_state, signal_data, draw_list,
+		signal_plot(plot_state, signal_data, plot_draw_area, draw_list,
 					ui_settings=ui_settings, emit=emit)
 
 		plot_react_to_drag(plot_state, signal_data, plot_draw_area,
@@ -293,18 +280,14 @@ def signal_plot_window(
 
 
 
-# def signal_plot(plot_state: PlotState,
-# 				signal_data: PMap_[SignalId, Signal],
-# 				plot_draw_area: Rect,
-# 				draw_list, ui_settings, emit) -> IMGui[None]:
 
 def signal_plot(plot_state: PlotState,
 				signal_data: PMap_[SignalId, Signal],
+				plot_draw_area: Rect,
 				draw_list, ui_settings, emit) -> IMGui[None]:
 
 	debug_log('plot_state', plot_state.get_variant_name())
 
-	plot_draw_area = plot_state.draw_area
 
 	if plot_state.is_Empty():
 		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
@@ -739,6 +722,35 @@ def time_range_to_ix_range_incl(time_range: TimeRange, signal: Signal) -> Tuple[
 # if is_in_rect(mouse_pos, plot_draw_area):
 # 	im.set_mouse_cursor(im.MOUSE_CURSOR_MOVE)
 # 	plot_state['hovered'] = True
+# else:
+# 	# im.set_mouse_cursor(im.MOUSE_CURSOR_ARROW)
+# 	plot_state['hovered'] = False
+
+
+
+# ZOOMING BUTTONS
+
+
+#   buttons
+
+# ^ important: zoom in narrows the time range,
+#   zooming out widens it.
+
+# if im.button("  -  "):
+# 	did_zoom = True
+# 	updated_time_range = scale_by_limited(zoom_factor, time_range,
+# 									   min_len=min_time_range_length,
+# 									   max_len=max_time_range_length)
+# im.same_line()
+# if im.button("  +  "):
+# 	did_zoom = True
+# 	updated_time_range = scale_by_limited(1/zoom_factor, time_range,
+# 									   min_len=min_time_range_length,
+# 									   max_len=max_time_range_length)
+
+# if did_zoom_____:
+# 	mid_x = left_x + (right_x - left_x)/2
+# 	draw_list.add_line(Vec2(mid_x, bottom_y), Vec2(mid_x, top_y), color=white)ot_state['hovered'] = True
 # else:
 # 	# im.set_mouse_cursor(im.MOUSE_CURSOR_ARROW)
 # 	plot_state['hovered'] = False
