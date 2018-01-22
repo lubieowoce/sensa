@@ -8,28 +8,24 @@ Work with EEG signals comfortably.
 ## Installation
 ### Windows
 
+*(64-bit only for now)*
 
-Sensa uses `pipenv` for installation, so you'll need python and pip. pipenv will install Sensa's own python and packages into an isolated pipenv environment, so it won't interfere with your system-wide python installation.
-
-~~> pip install pipenv~~
-
-*As of 27.11.2017 we have to install from github, not PyPI, because the PyPI version can't install `.whl` files yet, and we need that for numpy (maybe). Installing numpy on Windows (especially x64) is a pain, I hope it can be sorted out somehow.*
+Sensa uses `pipenv` for installation, so you'll need python and pip installed. pipenv will install Sensa's own python and packages into an isolated pipenv environment, so it won't interfere with your system-wide python installation.
 
 First, install pipenv:
 ```
-> pip install git+https://github.com/kennethreitz/pipenv
+> pip install pipenv
 ```
 Then, clone/download sensa.
 
-Download `numpy-1.13.3+mkl-cp35-cp35m-win32.whl`  
+Download `numpy-1.13.3+mkl-cp35-cp35m-win64.whl`  
 from [Christoph Gohlke's website](https://www.lfd.uci.edu/~gohlke/pythonlibs/#numpy)  
-Put `numpy-1.13.3+mkl-cp35-cp35m-win32.whl` in sensa/numpy_installer.  
+Put `numpy-1.13.3+mkl-cp35-cp35m-win64.whl` in sensa/whl/x64/numpy.  
 
 Install the dependencies:
 ```
 > cd sensa
 > pipenv install
-
 ```
 Done! 👍
 (hopefully) 
@@ -42,7 +38,7 @@ Similar to Windows, but right now the Pipfile is set up to install a numpy binar
 
 ## Run
 ```
-> pipenv run python gui.py
+> pipenv run python gui_glfw.py
 ```
 
 ## Shell
