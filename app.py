@@ -38,7 +38,8 @@ from filter_box import (
 	FilterBoxState,
 	FilterBoxAction,
 	filter_box_window, 
-	FilterBoxEffect, handle_filter_box_effect
+	FilterBoxEffect, handle_filter_box_effect,
+	is_filter_box_full,
 )
 
 from files import (
@@ -86,7 +87,7 @@ def sensa_app_init():
 	global PLOT_1_ID, PLOT_2_ID, FILTER_BOX_ID
 	PLOT_1_ID = min(state.plots.keys())
 	PLOT_2_ID = max(state.plots.keys())
-	# FILTER_BOX_ID = min(state.filter_boxes.keys())
+	FILTER_BOX_ID = min(state.filter_boxes.keys())
 	# End Demo
 
 	actions_initialize()
@@ -118,19 +119,61 @@ def sensa_post_frame():
 
 
 
+# ----------------------------------------
 
-# ----------------------------------------------
+
+frame_actions = None
+
+def actions_initialize():
+	global frame_actions
+	frame_actions = []
+
+def emit(action):
+	frame_actions.append(action)
+
+def clear_actions():
+	frame_actions.clear()
+
+
+def update_state_with_actions_and_run_effects() -> IO_[None]:
+	global state
+	global current_id
+	global frame_actions
+
+	for act in frame_actions:
+		# note: `frame_actions` might be modified if `update` emits an action
+		state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
+		for command in effects:
+			state = handle(state, command)
+
+
+
+
+
+def actions_post_frame():
+	global state
+	assert state != None
+	update_state_with_actions_and_run_effects()
+	clear_actions()
+
+
+
+
+# ==============================================
+
+
+
 
 AppState = PMap_[str, Any]
 
 @id_and_effects
 def initial_state() -> IdEff[AppState]:
 
-	# filter_boxes = pmap({id: initial_filter_box_state(id)
-	# 				  		 for id in get_ids(1)})
+	filter_boxes = pmap({id: initial_filter_box_state(id)
+					  		 for id in get_ids(1)})
 	data = m(
 		signals = m(),
-		# outputs = m({id: None for id in filter_boxes.keys()})
+		outputs = pmap({str(id): None for id in filter_boxes.keys()})
 	)
 
 	return m(
@@ -138,13 +181,13 @@ def initial_state() -> IdEff[AppState]:
 		data = data,
 		plots = pmap({id: initial_signal_plot_state(id)
 					  for id in get_ids(2)}),
-		# filter_boxes = filter_boxes,
+		filter_boxes = filter_boxes,
 	)
 
 # Demo
 PLOT_1_ID = None
 PLOT_2_ID = None
-# FILTER_BOX_ID = None
+FILTER_BOX_ID = None
 # End Demo
 
 # --------------------
@@ -164,18 +207,24 @@ def update(state: AppState, action: Action) -> IdEff[AppState]:
 		plots = state['plots']
 		old_plot_state = plots[target_id]
 
-		new_plot_state = update_plot(old_plot_state, state.data.signals, action)
-		# # Demo
-		# signal_data = state.data.outputs if action.id_ == PLOT_2_ID else state.data.signals
-		# new_plot_state = update_plot(old_plot_state, signal_data, action)
-		# # End Demo
+		# Demo
+		signal_data = state.data.outputs if action.id_ == PLOT_2_ID else state.data.signals
+		new_plot_state = update_plot(old_plot_state, signal_data, action)
+		# End Demo
+		# new_plot_state = update_plot(old_plot_state, state.data.signals, action)
 
 		if not (old_plot_state is new_plot_state): # reference comparison for speed
 			new_state = state.set('plots', plots.set(target_id, new_plot_state)) 
 
 
 	elif type(action) == FilterBoxAction:
-		pass
+		target_id = action.id_
+
+		old_filter_box_state = state.filter_boxes[target_id]
+		new_filter_box_state = update_filter_box(old_filter_box_state, action) # might emit effects
+		if not (old_filter_box_state is new_filter_box_state):
+			filter_boxes = state['filter_boxes']
+			new_state = state.set('filter_boxes', filter_boxes.set(target_id, new_filter_box_state))
 
 
 	elif type(action) == FileAction:
@@ -184,41 +233,55 @@ def update(state: AppState, action: Action) -> IdEff[AppState]:
 
 
 
-	# # Demo
-	# new_actions = []
+	# Demo
 
-	# if (type(action) == PlotAction
-	# 	and action.id_ == PLOT_1_ID
-	# 	and new_state != None
-	#    ):
-	# 	if action.is_SetTimeRange():
-	# 		new_actions.append( action.set(id_=PLOT_2_ID) )
+	if (type(action) == PlotAction
+		and action.id_ == PLOT_1_ID
+		and new_state != None
+	   ):
+		
 
-	# 	elif action.is_SelectSignal():
-	# 		new_actions.append(
-	# 			FilterBoxAction.Connect(
-	# 				id=FILTER_BOX_ID,
-	# 				signal_id=action.signal_id 
-	# 			)
-	# 		)
+		if action.is_SelectSignal():
+			emit(
+				FilterBoxAction.Connect(
+					id_=FILTER_BOX_ID,
+					signal_id=action.signal_id 
+				)
+			)
 
-	# 	elif action.is_SetEmpty():
-	# 		new_actions.append( action.set(id_=PLOT_2_ID ) )
 
-	# 		new_actions.append(
-	# 			FilterBoxAction.Disconnect(id_=FILTER_BOX_ID)
-	# 		)
 
-	# elif (type(action) == FilterBoxAction
-	# 	  and action.id_ == FILTER_BOX_ID
-	# 	  and new_state != None
-	# 	  ):
-	# 	pass
+		elif action.is_SetTimeRange():
+			if state.plots[PLOT_2_ID].is_Full():
+				emit( action.set(id_=PLOT_2_ID) )
+
+		elif action.is_SetEmpty():
+
+			emit(
+				FilterBoxAction.Disconnect(id_=FILTER_BOX_ID)
+			)
+
+			emit( action.replace(id_=PLOT_2_ID ) )
+
+
+	if (new_state != None
+		and state.plots[PLOT_2_ID].is_Empty()
+		and is_filter_box_full(state.filter_boxes[FILTER_BOX_ID])
+		and str(FILTER_BOX_ID) in state.data.outputs.keys()
+		):
+			emit(
+				PlotAction.SelectSignal(
+					id_=PLOT_2_ID,
+					signal_id=str(FILTER_BOX_ID))
+			)
+	# End Demo
+
 
 
 
 
 	return new_state if new_state != None else state
+
 
 # ------------------------
 
@@ -231,14 +294,22 @@ def handle(state: AppState, command) -> IO_[AppState]:
 		return state.set('data', data.set('signals', new_signals))
 
 	elif type(command) == FilterBoxEffect:
-		filter_box_id = command.id
+		filter_box_id = command.id_
 		filter_box_state = state.filter_boxes[filter_box_id]
 
 		o_output = handle_filter_box_effect(filter_box_state, state.data.signals, command)
 
+		# Demo
+		output_id = str(filter_box_id)
+
 		data    = state['data']
 		outputs = data['outputs']
-		return state.set('data', data.set('outputs', outputs.set(filter_box_id, o_output) ))
+		return state.set('data', data.set('outputs', outputs.set(output_id, o_output) ))
+		# End Demo
+
+		# data    = state['data']
+		# outputs = data['outputs']
+		# return state.set('data', data.set('outputs', outputs.set(filter_box_id, o_output) ))
 
 	else:
 		return state
@@ -246,50 +317,6 @@ def handle(state: AppState, command) -> IO_[AppState]:
 
 # =======================================================
 
-
-
-
-frame_actions = None
-
-def actions_initialize():
-	global frame_actions
-	frame_actions = []
-
-def emit(action):
-	frame_actions.append(action)
-
-def clear_actions():
-	frame_actions.clear()
-
-
-def update_state_with_actions(actions) -> List[Effect]:
-	global state
-	global current_id
-
-	all_effects = []
-	for act in actions:
-		state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
-		all_effects.extend(effects)
-	return all_effects
-
-
-def update_state_with_effects(effects: List[Effect]) -> IO_[None]:
-	global state
-	for eff in effects:
-		state = handle(state, eff)
-
-
-def actions_post_frame():
-	global state
-	assert state != None
-	effects = update_state_with_actions(frame_actions)
-	update_state_with_effects(effects)
-	clear_actions()
-
-
-
-
-# ==============================================
 
 
 
@@ -353,11 +380,16 @@ def draw():
 
 	
 	# signal plot 1
-	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals, ui_settings=ui['settings'], emit=emit)
+	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals,
+					   ui_settings=ui['settings'], emit=emit)
+
+	# filter box
+	filter_box_window(state.filter_boxes[FILTER_BOX_ID], state.data.signals,
+					  ui_settings=ui_settings, emit=emit)
+
 	# signal plot 2
-	signal_plot_window(state.plots[PLOT_2_ID], state.data.signals, ui_settings=ui['settings'], emit=emit)
-
-
+	signal_plot_window(state.plots[PLOT_2_ID], state.data.outputs,
+					   ui_settings=ui['settings'], emit=emit)
 
 	# # filter box
 	# filter_box_state = ui['filter_box']

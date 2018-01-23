@@ -2,6 +2,8 @@ from typing import (
 	Tuple, Sequence
 )
 
+from pyrsistent import m, pmap
+
 from functools import partial as part
 # import numpy as np
 from scipy.signal import butter, lfilter
@@ -36,13 +38,13 @@ def simple_filter(signal: Signal, cutoff_freq: float, type: str) -> Signal:
 	# 		so the new info could be incorrect
 
 lowpass_filter_sig = ['cutoff_freq']
-lowpass_default_params = {'cutoff_freq': 10*Hz}
+lowpass_default_params = m(cutoff_freq = 10*Hz)
 # lowpass_filter : (Signal, cutoff_freq: float) -> float
 lowpass_filter = part(simple_filter, type='low')
 lowpass_tr = Trans('Lowpass filter', lowpass_filter, lowpass_filter_sig, )
 
 highpass_filter_sig = ['cutoff_freq']
-highpass_default_params = {'cutoff_freq': 0.05*Hz}
+highpass_default_params = m(cutoff_freq = 0.05*Hz)
 # highpass_filter : (Signal, float) -> float
 highpass_filter = part(simple_filter, type='high')
 highpass_tr = Trans('Highpass filter', highpass_filter, highpass_filter_sig)

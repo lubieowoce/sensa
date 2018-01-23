@@ -5,10 +5,10 @@ from typing import (
 	Generic, TypeVar,
 )
 
-# from pyrsistent import (
-# 	PMap,
-# 	PVector, 
-# )
+from pyrsistent import (
+	PMap,
+	# PVector, 
+)
 
 
 TV = TypeVar
@@ -16,8 +16,13 @@ K = TV('K'); A = TV('A'); B = TV('B'); C=TV('C'); R = TV('R')
 
 
 
+# class PMap_alias(Generic[K, A]):
+# 	pass
+# PMap 
+
 class PMap_(Generic[K, A]):
 	pass
+
 class PVector_(Generic[A]):
 	pass
 

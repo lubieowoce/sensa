@@ -140,6 +140,7 @@ def update_plot(plot_state: PlotState,
 		# compute the default time range
 		new_signal_id = action.signal_id
 		new_signal = signal_data[new_signal_id]
+		assert new_signal != None, action
 
 		max_t = (len(new_signal.data)-1) * new_signal.time_between_samples
 		default_end_t = limit_upper(  INITIAL_VIEW_SAMPLES_N * new_signal.time_between_samples  , high=max_t)

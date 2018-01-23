@@ -8,6 +8,7 @@ from types_util import (
 	PMap_,
 	IO_, IMGui, 
 )
+from pyrsistent import PMap
 
 import imgui as im
 
@@ -23,7 +24,8 @@ from better_combo import str_combo_with_none
 # from trans import Trans
 
 from filters import (
-    available_filters
+    available_filters,
+    default_parameters,
 )
 
 
@@ -54,7 +56,8 @@ FilterState, \
 'FilterState', [
 	('NoFilter', []),
 	('Filter',	 [('filter_id', FilterId),
-				  ('params',    PMap_[str, float])]),
+				  ('params',    PMap)]),
+				  # ('params',    PMap_[str, float])]),
 ]
 )
 
@@ -82,8 +85,8 @@ def initial_filter_box_state(id_: Id) -> FilterBoxState:
 FilterBoxAction, \
 	Disconnect, \
 	Connect, \
-	SetFilter, \
 	UnsetFilter, \
+	SetFilter, \
 	SetFilterParam, \
 = union(
 'FilterBoxAction', [
@@ -130,9 +133,10 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 
 	elif action.is_SetFilter():
 		filter_id = action.filter_id
-		new_state = old_state._replace(filter_state=Filter(filter_id=filter_id))
+		new_state = old_state._replace(filter_state=Filter(filter_id=filter_id,
+														   params=default_parameters[filter_id] ))
 
-	elif action.is_SetParam():
+	elif action.is_SetFilterParam():
 		filter_state = old_state .filter_state
 		if   filter_state .is_NoFilter():
 			bad_action("Cannot set a param, no filter selected")
@@ -140,8 +144,9 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 		elif filter_state .is_Filter():
 			param_name = action.name
 			param_val  = action.value
-			new_filter_state = filter_state.set(**{param_name: param_val})
-			new_state = old_state.set(filter_state=new_filter_state)
+			old_params = filter_state.params
+			new_filter_state = filter_state.set(params=old_params.set(param_name, param_val))
+			new_state = old_state._replace(filter_state=new_filter_state)
 		else:
 			impossible("Invalid filter state: "+filter_state)
 
@@ -166,12 +171,13 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 
 
 def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, Signal], ui_settings, emit) -> IMGui[None]:
-	with window(name="filter#"+filter_box_state.id_):
+	with window(name="filter (id={id_})".format(id_=filter_box_state.id_)):
 
 		# signal selection combo
 		if len(signal_data) > 0:
 			signal_ids =  sorted(signal_data.keys())
-			changed, o_input_signal_id = str_combo_with_none("signal", filter_box_state['input_signal_id'], signal_ids)
+			o_signal_id = None if filter_box_state.connection_state.is_Disconnected() else  filter_box_state.connection_state.signal_id
+			changed, o_input_signal_id = str_combo_with_none("signal", o_signal_id , signal_ids)
 			if changed:
 				if o_input_signal_id != None:
 					emit( Connect(id_=filter_box_state.id_, signal_id=o_input_signal_id) )
@@ -183,7 +189,9 @@ def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, 
 
 		# filter type combo
 		filter_ids = sorted(available_filters.keys())
-		changed, o_filter_id = str_combo_with_none("filter", filter_box_state['filter_id'], filter_ids)
+		o_filter_id = None if filter_box_state.filter_state.is_NoFilter() else  filter_box_state.filter_state.filter_id
+
+		changed, o_filter_id = str_combo_with_none("filter", o_filter_id, filter_ids)
 		if changed:
 			if o_filter_id != None:
 				emit( SetFilter(id_=filter_box_state.id_, filter_id=o_filter_id) )
@@ -194,13 +202,14 @@ def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, 
 		# param inputs
 		slider_power = ui_settings['filter_slider_power']
 
-		if filter_box_state .filter_state .isSet():
+		if filter_box_state .filter_state .is_Filter():
 
-			filter_id = filter_box_state .filter_state .filter_id
+			filter_id     = filter_box_state .filter_state .filter_id
+			filter_params = filter_box_state .filter_state .params
 			filter = available_filters[filter_id]
 
 			for param_name in sorted(filter.func_sig):
-				changed, new_param_val = im.slider_float(param_name, filter.params[param_name],
+				changed, new_param_val = im.slider_float(param_name, filter_params[param_name],
 														 min_value=0.001, max_value=95.,
 														 power=slider_power)
 				if changed:
@@ -239,11 +248,12 @@ def handle_filter_box_effect(
 		signal_id = state .connection_state .signal_id
 		input_signal = signal_data[signal_id]
 
-		filter_id = state .filter_state .filter_id
-		parameters = state .filter_state .parameters
+		filter_id  = state .filter_state .filter_id
+		parameters = state .filter_state .params
 		transformation = available_filters[filter_id]
 
 		output_signal = transformation(input_signal, parameters)
+		assert output_signal != None
 		return output_signal
 
 	else:
