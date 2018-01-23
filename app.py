@@ -62,6 +62,7 @@ INITIAL_ACTIONS = [FileAction.Load(filename=example_file_path)]
 
 
 current_id = None
+current_signal_id = None
 state = None
 ui = None
 
@@ -70,6 +71,7 @@ ui = None
 
 def sensa_app_init():
 	global current_id
+	global current_signal_id
 	global state
 	global frame_actions
 	global ui

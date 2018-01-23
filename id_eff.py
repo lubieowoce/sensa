@@ -1,20 +1,24 @@
 from typing import (
-	Tuple, List,
+	Any,
+	Tuple, List, Dict,
 	Generic,
 )
 from types_util import (
 	Id, Effect,
 	A,
-	Fun, Anys,
+	Fun, 
 )
 
 from sensa_util import identity
 
-from flags import DEBUG
+import flags
 
 import builtins
 # Only way to make a function visible to all modules.
 # https://stackoverflow.com/a/15959638
+
+
+
 
 
 class IdEff(Generic[A]):
@@ -22,7 +26,7 @@ class IdEff(Generic[A]):
 	pass
 
 
-def run_id_eff(f: Fun[Anys, IdEff[A]], id: Id) -> Fun[ Anys,  Tuple[A, Id, List[Effect]] ]:
+def run_id_eff(f: Fun[..., IdEff[A]], id: Id) -> Fun[..., Tuple[A, Id, List[Effect]] ]:
 	"""
 	Takes a starting id state.
 	Wraps `f` in an isolated environment where
@@ -78,7 +82,7 @@ def is_in_id_eff():
 		and 'get_id'          in dir(builtins) \
 		and 'emit_effect'     in dir(builtins)
 
-if DEBUG:
+if flags.DEBUG:
 	def id_and_effects(f):
 		"""
 		Decorator that adds a runtime check to `f`.
