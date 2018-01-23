@@ -15,7 +15,10 @@ import imgui as im
 from uniontype import union
 
 from sensa_util import (impossible, bad_action)
-from id_eff import (IdEff, id_and_effects)
+from eff import (
+	Eff, effectful,
+	EFFECTS, SIGNAL_ID, ACTIONS,
+)
 
 from eeg_signal import Signal
 from imgui_widget import window
@@ -115,8 +118,8 @@ FilterBoxEffect, \
 )
 
 
-@id_and_effects
-def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction) -> IdEff[FilterBoxState]:
+@effectful(EFFECTS)
+def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction) -> Eff(EFFECTS)[FilterBoxState]:
 	assert filter_box_state.id_ == action.id_
 	old_state = filter_box_state
 	new_state = None

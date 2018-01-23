@@ -22,7 +22,14 @@ from debug_util import (
 )
 
 
-from id_eff import IdEff, id_and_effects, run_id_eff, get_ids
+# from id_eff import IdEff, id_and_effects, run_id_eff, get_ids
+from eff import (
+	Eff, run_eff,
+	effectful,
+	ID, EFFECTS, SIGNAL_ID, ACTIONS,
+	get_ids
+)
+
 from imgui_widget import window
 
 
@@ -82,8 +89,23 @@ def sensa_app_init():
 
 	current_id = 0
 	
-	state, current_id, _ = run_id_eff(initial_state, id=current_id)()
+	# create the initial state	
+	state, eff_res = run_eff(initial_state, id=current_id)()
+	current_id = eff_res[ID]
+
 	assert state != None
+
+	# run the initial actions
+	for act in INITIAL_ACTIONS:
+
+		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
+
+		INITIAL_ACTIONS.extend(eff_res[ACTIONS])
+		for command in eff_res[EFFECTS]:
+			state = handle(state, command)
+
+	assert state != None
+
 
 	# Demo
 	global PLOT_1_ID, PLOT_2_ID, FILTER_BOX_ID
@@ -103,9 +125,6 @@ def sensa_app_init():
 	}
 
 	
-	for action in INITIAL_ACTIONS:
-		emit(action)
-	actions_post_frame()
 
 
 
@@ -130,7 +149,7 @@ def actions_initialize():
 	global frame_actions
 	frame_actions = []
 
-def emit(action):
+def _emit(action):
 	frame_actions.append(action)
 
 def clear_actions():
@@ -144,8 +163,11 @@ def update_state_with_actions_and_run_effects() -> IO_[None]:
 
 	for act in frame_actions:
 		# note: `frame_actions` might be modified if `update` emits an action
-		state, current_id, effects = run_id_eff(update, id=current_id)(state, act)
-		for command in effects:
+
+		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
+
+		frame_actions.extend(eff_res[ACTIONS])
+		for command in eff_res[EFFECTS]:
 			state = handle(state, command)
 
 
@@ -168,8 +190,8 @@ def actions_post_frame():
 
 AppState = PMap_[str, Any]
 
-@id_and_effects
-def initial_state() -> IdEff[AppState]:
+@effectful(ID)
+def initial_state() -> Eff(ID)[AppState]:
 
 	filter_boxes = pmap({id: initial_filter_box_state(id)
 					  		 for id in get_ids(1)})
@@ -196,8 +218,8 @@ FILTER_BOX_ID = None
 
 
 
-@id_and_effects
-def update(state: AppState, action: Action) -> IdEff[AppState]:
+@effectful(ACTIONS, EFFECTS)
+def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 	new_state = None
 
@@ -383,15 +405,15 @@ def draw():
 	
 	# signal plot 1
 	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals,
-					   ui_settings=ui['settings'], emit=emit)
+					   ui_settings=ui['settings'], emit=_emit)
 
 	# filter box
 	filter_box_window(state.filter_boxes[FILTER_BOX_ID], state.data.signals,
-					  ui_settings=ui_settings, emit=emit)
+					  ui_settings=ui_settings, emit=_emit)
 
 	# signal plot 2
 	signal_plot_window(state.plots[PLOT_2_ID], state.data.outputs,
-					   ui_settings=ui['settings'], emit=emit)
+					   ui_settings=ui['settings'], emit=_emit)
 
 	# # filter box
 	# filter_box_state = ui['filter_box']

@@ -17,6 +17,16 @@ import builtins
 # Only way to make a function visible to all modules.
 # https://stackoverflow.com/a/15959638
 
+EffType = str
+
+class EffVal(Generic[A]):
+	pass
+	# def __init__(self, *eff_types: Tuple[EffType]):
+	# 	self.eff_types = eff_types
+
+Eff = lambda *args: EffVal
+
+
 ID        = "ID"
 EFFECTS   = "EFFECTS"
 SIGNAL_ID = "SIGNAL_ID"
@@ -67,10 +77,7 @@ eff_type_operation_name = {
 	ACTIONS:   'emit',
 }
 
-class EffVal(Generic[A]):
-	pass
 
-Eff = lambda *args: EffVal
 
 # Eff(ID, EFFECTS)[A] -> gets ids, emits effects, returns A
 # Eff(ACTIONS)[A] -> emits actions, returns A
