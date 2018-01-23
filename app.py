@@ -6,7 +6,7 @@ from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 
 from typing import (
 	Any,
-	List,
+	# List,
 )
 from types_util import (
 	PMap_,
@@ -27,7 +27,8 @@ from eff import (
 	Eff, run_eff,
 	effectful,
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
-	get_ids
+	get_ids,
+	eff_operation,
 )
 
 from imgui_widget import window
@@ -35,14 +36,14 @@ from imgui_widget import window
 
 from plot import (
 	initial_signal_plot_state, update_plot,
-	PlotState,
+	# PlotState,
 	PlotAction,
 	signal_plot_window,
 )
 
 from filter_box import (
 	initial_filter_box_state, update_filter_box,
-	FilterBoxState,
+	# FilterBoxState,
 	FilterBoxAction,
 	filter_box_window, 
 	FilterBoxEffect, handle_filter_box_effect,
@@ -73,6 +74,7 @@ current_signal_id = None
 state = None
 ui = None
 
+frame_actions = None
 
 
 
@@ -100,9 +102,11 @@ def sensa_app_init():
 
 		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
 
-		INITIAL_ACTIONS.extend(eff_res[ACTIONS])
+		INITIAL_ACTIONS.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+
 		for command in eff_res[EFFECTS]:
 			state = handle(state, command)
+
 
 	assert state != None
 
@@ -114,7 +118,6 @@ def sensa_app_init():
 	FILTER_BOX_ID = min(state.filter_boxes.keys())
 	# End Demo
 
-	actions_initialize()
 
 	ui = {
 		'settings': {
@@ -127,38 +130,21 @@ def sensa_app_init():
 	
 
 
-
-
-
-
-def sensa_post_frame():
-	actions_post_frame()
-
-	if flags.DEBUG:
-		debug_post_frame()
-		debug_window()
-
-
-
-# ----------------------------------------
-
-
-frame_actions = None
-
-def actions_initialize():
+def draw_and_log_actions() -> IO_[None]:
 	global frame_actions
-	frame_actions = []
 
-def _emit(action):
-	frame_actions.append(action)
+	_, eff_res = run_eff(  draw,   actions=[])()
 
-def clear_actions():
-	frame_actions.clear()
+	frame_actions = eff_res[ACTIONS]
+	# since this will be called by run_glfw_app,
+	# writing to frame_actions is the only way to communicate
+	# with the rest of our code
 
 
-def update_state_with_actions_and_run_effects() -> IO_[None]:
+
+
+def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 	global state
-	global current_id
 	global frame_actions
 
 	for act in frame_actions:
@@ -166,19 +152,23 @@ def update_state_with_actions_and_run_effects() -> IO_[None]:
 
 		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
 
-		frame_actions.extend(eff_res[ACTIONS])
+		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+
 		for command in eff_res[EFFECTS]:
 			state = handle(state, command)
 
 
 
-
-
-def actions_post_frame():
+def sensa_post_frame():
 	global state
-	assert state != None
-	update_state_with_actions_and_run_effects()
-	clear_actions()
+	global frame_actions
+
+	update_state_with_frame_actions_and_run_effects()
+	frame_actions.clear()
+
+	if flags.DEBUG:
+		debug_post_frame()
+		debug_window()
 
 
 
@@ -220,6 +210,7 @@ FILTER_BOX_ID = None
 
 @effectful(ACTIONS, EFFECTS)
 def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
+	emit = eff_operation('emit'); emit_effect = eff_operation('emit_effect')
 
 	new_state = None
 
@@ -343,12 +334,11 @@ def handle(state: AppState, command) -> IO_[AppState]:
 
 
 
+@effectful(ACTIONS)
+def draw() -> Eff(ACTIONS)[None]:
+	emit = eff_operation('emit')
 
-def draw():
 	global state
-
-
-	assert len(frame_actions) == 0, "Actions buffer not cleared! Is:" + str(frame_actions) 
 
 
 	im.show_metrics_window()
@@ -357,7 +347,7 @@ def draw():
 
 	with window(name="signals"):
 		if im.button("load example"):
-			emit( FileAction.LoadFile(filename=example_file_path))
+			emit( FileAction.Load(filename=example_file_path) )
 
 		signals = state.data.signals
 		if len(signals) > 0:
@@ -405,55 +395,16 @@ def draw():
 	
 	# signal plot 1
 	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals,
-					   ui_settings=ui['settings'], emit=_emit)
+					   ui_settings=ui['settings'])
 
 	# filter box
 	filter_box_window(state.filter_boxes[FILTER_BOX_ID], state.data.signals,
-					  ui_settings=ui_settings, emit=_emit)
+					  ui_settings=ui_settings)
 
 	# signal plot 2
 	signal_plot_window(state.plots[PLOT_2_ID], state.data.outputs,
-					   ui_settings=ui['settings'], emit=_emit)
+					   ui_settings=ui['settings'])
 
-	# # filter box
-	# filter_box_state = ui['filter_box']
-
-	# # DEMO
-	# # filter box should take the signal displayed in plot 1 as input
-	# if (is_full_plot(ui['plot_1'] or is_freshly_selected_plot(ui['plot_1'])) \
-	# 	and ui['plot_1']['signal_id_changed']):
-
-	# 	set_filter_box_input_signal_id(filter_box_state, ui['plot_1']['signal_id'])
-
-	# elif is_filter_box_connected(filter_box_state) and is_empty_plot(ui['plot_1']):
-	# 	disconnect_filter_box(filter_box_state)
-	# else:
-	# 	filter_box_state['input_signal_id_changed'] = False
-	# # END DEMO
-
-	# filter_box(filter_box_state, data['signals'], ui_settings=ui['settings'], emit=emit)
-	# update_filter_box(filter_box_state, data['signals'])
-
-
-
-
-	# # signal plot 2
-
-	# # DEMO
-	# # plot 2 should display the output of filter box
-	# if FILTER_BOX_OUTPUT_SIGNAL_ID in data['signals'] and is_empty_plot(ui['plot_2']):
-	# 	select_plot_signal(ui['plot_2'], FILTER_BOX_OUTPUT_SIGNAL_ID)
-	# elif FILTER_BOX_OUTPUT_SIGNAL_ID not in data['signals']:
-	# 	set_plot_empty(ui['plot_2'])
-
-	# # plot 2 should have the same time range as plot 1
-	# if is_full_plot(ui['plot_1']) and is_full_plot(ui['plot_2']):
-	# 	set_plot_time_range(ui['plot_2'], ui['plot_1']['time_range'])
-		
-	# # END DEMO
-
-	# ui['plot_rect_2'] = signal_plot_window(ui['plot_2'], data['signals'], ui_settings=ui['settings'], emit=emit)
-	# plot_react_to_drag(ui['plot_2'], data['signals'], ui['plot_rect_2'], ui_settings=ui['settings'])
 
 
 	# debug_log_dict('ui', ui)
@@ -466,7 +417,7 @@ def draw():
 
 
 if __name__ == "__main__":
-	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw, post_frame=sensa_post_frame,
+	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw_and_log_actions, post_frame=sensa_post_frame,
 					   target_framerate=target_framerate, window_title=window_title,
 					   window_size=initital_window_size)
 

@@ -83,7 +83,6 @@ eff_type_operation_name = {
 # Eff(ACTIONS)[A] -> emits actions, returns A
 
 
-
 kwarg_to_eff_type = {
 	'id': 		 ID,
 	'effects':   EFFECTS,
@@ -91,6 +90,14 @@ kwarg_to_eff_type = {
 	'actions':   ACTIONS,
 }
 
+# --------------
+
+BUILTINS_EXECUTING_EFF_FLAG = '__EXECUTING_EFF'
+
+def builtins_flag_for_effect_type(eff_t) -> str:
+	return '__EXECUTING_EFF_TYPE_' + eff_t
+
+# --------------
 
 def run_eff(f: Fun[..., Eff(...)[A]],
 			**initial_states_kw: Dict[str, Any]) \
@@ -104,6 +111,9 @@ def run_eff(f: Fun[..., Eff(...)[A]],
 			"Not enough initial_states in initial_states_kw for specified effect types:" + str(f.__effect_types__) +", initial_states: " + str(initial_states)
 
 	def result_fn(*args, **kwargs) -> Fun[..., Tuple[A, ...]]:
+
+		# set the main flag
+		setattr(builtins, BUILTINS_EXECUTING_EFF_FLAG, True)
 
 		# inject all required operations (and their flags) into builtins
 		for EFF_T in effect_types_used:
@@ -120,6 +130,9 @@ def run_eff(f: Fun[..., Eff(...)[A]],
 			delattr(builtins, operation_name)
 			delattr(builtins, builtins_flag_for_effect_type(EFF_T))
 
+		# remove the main flag
+		delattr(builtins, BUILTINS_EXECUTING_EFF_FLAG)
+
 		return result, initial_states
 
 	return result_fn
@@ -131,8 +144,12 @@ if flags.DEBUG:
 		def effectful_decorator(f):
 
 			def wrapped(*args, **kwargs):
-				assert is_in_eff(*effect_types), "`is_in_eff` failed. This computation is meant to be run using `run_eff`.."
+				assert is_in_eff(), "`is_in_eff()` failed. This computation is meant to be run using `run_eff`"
+				assert all_eff_operations_present(*effect_types), "Some eff operations are missing, (or their flags aren't set - `eff` bug)"
+
 				return f(*args, **kwargs)
+
+
 
 			wrapped.__effect_types__ = effect_types
 			return wrapped
@@ -145,16 +162,30 @@ else: # not flags.DEBUG -> no runtime check
 
 # -----------------
 
-def is_in_eff(*effect_types) -> bool:
-	return all(builtins_flag_for_effect_type(eff_t) in dir(builtins) for eff_t in effect_types)
+def is_in_eff() -> bool:
+	return BUILTINS_EXECUTING_EFF_FLAG in dir(builtins)
+
+def all_eff_operations_present(*effect_types) -> bool:
+	return (     all(builtins_flag_for_effect_type(eff_t) in dir(builtins) for eff_t in effect_types)
+		    and  all(      eff_type_operation_name[eff_t] in dir(builtins) for eff_t in effect_types))
+# --------------------------
 
 
-def builtins_flag_for_effect_type(eff_t) -> str:
-	return '_EXECUTING_IN_' + eff_t
+
+@effectful()
+def eff_operation(name: str) -> Fun[..., Any]:
+	"""
+	Convenience - Add `emit = get_eff_operation('emit')`
+	to get linters to stop complaining about undefined operations.
+	(Actually just retrieves stuff from builtins)
+	"""
+
+	assert name in dir(builtins), "Operation '" + name +"' not available"
+	return getattr(builtins, name)
 
 
 
-# -----------------
+# -------------------
 
 @effectful(ID, EFFECTS)
 def f() -> Eff(ID, EFFECTS)[Dict[str, Id]]:

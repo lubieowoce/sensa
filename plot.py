@@ -33,6 +33,12 @@ from sensa_util import (
 	impossible, bad_action,
 )
 
+from eff import (
+	Eff, effectful,
+	ACTIONS,
+	eff_operation,
+)
+
 from time_range import (
 	TimeRange, clamp_time_range, time_range_length,
 	scale_at_point_limited, time_range_subtract_offset, 
@@ -226,11 +232,13 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 # 0       1       2       3       4       5     i
 
 
-
+@effectful(ACTIONS)
 def signal_plot_window(
 	plot_state: Dict[str, Any],
 	signal_data: Dict[str, Signal],
-	ui_settings: Dict[str, Any], emit) -> IMGui[None]:
+	ui_settings: Dict[str, Any]) -> Eff(ACTIONS)[IMGui[None]]:
+
+	emit = eff_operation('emit')
 
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
@@ -274,10 +282,10 @@ def signal_plot_window(
 						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
 
 		signal_plot(plot_state, signal_data, plot_draw_area, draw_list,
-					ui_settings=ui_settings, emit=emit)
+					ui_settings=ui_settings)
 
 		plot_react_to_drag(plot_state, signal_data, plot_draw_area,
-						   ui_settings=ui_settings, emit=emit)
+						   ui_settings=ui_settings)
 
 
 
@@ -285,29 +293,31 @@ def signal_plot_window(
 def signal_plot(plot_state: PlotState,
 				signal_data: PMap_[SignalId, Signal],
 				plot_draw_area: Rect,
-				draw_list, ui_settings, emit) -> IMGui[None]:
+				draw_list, ui_settings) -> IMGui[None]:
 
 	debug_log('plot_state', plot_state.get_variant_name())
 
 
 	if plot_state.is_Empty():
-		show_empty_plot(plot_state, plot_draw_area, draw_list, emit)
+		show_empty_plot(plot_state, plot_draw_area, draw_list)
 
 
 	elif plot_state.is_Full():
 		signal_id = plot_state.signal_id
 		signal = signal_data[signal_id]
 
-		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui_settings, emit)
+		show_full_plot(plot_state, signal, plot_draw_area, draw_list, ui_settings)
 
 	else:
 		impossible("Invalid plot state: "+plot_state)
 
 
-
-def plot_react_to_drag(plot_state: PlotState, signal_data: PMap_[str, Signal], plot_draw_area: Rect, ui_settings, emit) -> Actions[None]:
-	# assert_is_valid_plot(plot_state)
-
+@effectful(ACTIONS)
+def plot_react_to_drag(plot_state: PlotState,
+					   signal_data: PMap_[str, Signal],
+					   plot_draw_area: Rect,
+					   ui_settings) -> Eff(ACTIONS)[None]:
+	emit = eff_operation('emit')
 
 	if plot_state.is_Empty():
 		return
@@ -435,7 +445,12 @@ def plot_react_to_drag(plot_state: PlotState, signal_data: PMap_[str, Signal], p
 
 
 
-def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: Rect,  draw_list, ui_settings, emit) -> IMGui[None]:
+def show_full_plot(plot_state: Dict[str, Any],
+				   signal: Signal,
+				   plot_draw_area: Rect,
+				   draw_list,
+				   ui_settings) -> IMGui[None]:
+
 	assert plot_state.is_Full()
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
@@ -611,12 +626,22 @@ def show_full_plot(plot_state: Dict[str, Any], signal: Signal, plot_draw_area: R
 	# END
 
 
-def show_empty_plot(plot_state: Dict[str, Any], plot_draw_area: Rect, draw_list, emit) -> IMGui[None]:
+def show_empty_plot(plot_state: Dict[str, Any], plot_draw_area: Rect, draw_list) -> IMGui[None]:
 	assert plot_state.is_Empty()
 	# BOX AROUND PLOT
 	gray = (0.8, 0.8, 0.8, 1)
 	add_rect(draw_list, plot_draw_area, gray)
 	im.text("Nothing here? Load a file and select a channel.")
+
+
+
+
+
+
+# ================================================
+
+
+
 
 
 

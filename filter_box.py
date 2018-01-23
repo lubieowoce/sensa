@@ -18,6 +18,7 @@ from sensa_util import (impossible, bad_action)
 from eff import (
 	Eff, effectful,
 	EFFECTS, SIGNAL_ID, ACTIONS,
+	eff_operation,
 )
 
 from eeg_signal import Signal
@@ -120,6 +121,7 @@ FilterBoxEffect, \
 
 @effectful(EFFECTS)
 def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction) -> Eff(EFFECTS)[FilterBoxState]:
+	emit_effect = eff_operation('emit_effect')
 	assert filter_box_state.id_ == action.id_
 	old_state = filter_box_state
 	new_state = None
@@ -172,8 +174,10 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 
 
 
+@effectful(ACTIONS)
+def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, Signal], ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
+	emit = eff_operation('emit')
 
-def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, Signal], ui_settings, emit) -> IMGui[None]:
 	with window(name="filter (id={id_})".format(id_=filter_box_state.id_)):
 
 		# signal selection combo
