@@ -62,7 +62,6 @@ from uniontype import union
 # 	  info
 
 
-SignalId = str
 
 
 DragState, \
@@ -257,21 +256,37 @@ def signal_plot_window(
 		draw_list = im.get_window_draw_list()
 
 		# signal selector
+
 		if len(signal_data) > 0:
-			signal_ids =  sorted(signal_data.keys())
-			debug_log('signal_ids', signal_ids)
+			signal_ids = signal_data.keys()
+			visible_signal_names = {sig_id: signal_names[sig_id] for sig_id in signal_ids}
 
-			prev_o_selected_signal_id = None if plot_state.is_Empty() else plot_state.signal_id
+			# disambiguate signals with duplicate names
+			duplicated_signal_names = 	{sig_id: sig_name
+										 for (sig_id, sig_name) in visible_signal_names.items()
+										 if list(visible_signal_names.values()).count(sig_name) > 1
+									  	}
+			disambiguated_signal_names = 	{sig_id: "{name} ({id})".format(name=sig_name, id=sig_id)
+											 for (sig_id, sig_name) in duplicated_signal_names.items()
+										 	}
+			visible_signal_names.update(disambiguated_signal_names)
+			# now `visible_signal_names` is an invertible mapping
+			labels = sorted(visible_signal_names.values()) 
+			prev_o_selected_signal_name = None if plot_state.is_Empty() else visible_signal_names[plot_state.signal_id]
 
-			changed, o_selected_signal_id = str_combo_with_none("channel", prev_o_selected_signal_id, signal_ids)
+			changed, o_selected_signal_name = str_combo_with_none("signal", prev_o_selected_signal_name, labels)
 			if changed:
-				if o_selected_signal_id != None:
-					selected_signal_id = o_selected_signal_id
+				if o_selected_signal_name != None:
+					# invert `visible_signal_names` to find the signal id
+					signal_name_to_id = {sig_name: sig_id for (sig_id, sig_name) in visible_signal_names.items()}
+					selected_signal_id = signal_name_to_id[o_selected_signal_name]
 					emit( SelectSignal(id_=plot_state.id_, signal_id=selected_signal_id) )
 				else:
 					emit( SetEmpty(id_=plot_state.id_) )
 		else:
-			im.text("No signals loaded")
+			im.text("No signals available")
+
+
 
 		# checkbox
 		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
@@ -633,6 +648,7 @@ def show_empty_plot(plot_state: Dict[str, Any], plot_draw_area: Rect, draw_list)
 	gray = (0.8, 0.8, 0.8, 1)
 	add_rect(draw_list, plot_draw_area, gray)
 	im.text("Nothing here? Load a file and select a channel.")
+
 
 
 

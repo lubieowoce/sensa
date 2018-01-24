@@ -26,6 +26,8 @@ from eff import (
 	get_signal_ids,
 )
 
+from debug_util import debug_log
+
 from pyrsistent import m
 
 from eeg_signal import Signal
@@ -58,8 +60,8 @@ def handle_file_effect(signals: PMap_[SignalId, Signal],
 					   command: FileEffect) -> IO_[ Tuple[ PMap_[SignalId, Signal],
 														   PMap_[SignalId, str]    ] ]:
 
+	debug_log('command', command)
 	if command.is_Load():
-
 		new_signals = load_edf(command.filename)
 		n_signals = len(new_signals)
 

@@ -108,7 +108,8 @@ def sensa_app_init():
 		INITIAL_ACTIONS.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
 		for command in eff_res[EFFECTS]:
-			state = handle(state, command)
+			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			current_signal_id = eff_res[SIGNAL_ID]
 
 
 	assert state != None
@@ -162,7 +163,8 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			current_signal_id = eff_res[SIGNAL_ID]
 
-
+	debug_log_dict('state', state)
+	debug_log_dict('state.data', state.data)
 
 def sensa_post_frame():
 	global state
@@ -203,7 +205,7 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 		signal_names = m(),   # type: PMap_[SignalId, str]
 
 		output_ids = output_ids, # type: PMap_[Id, SignalId]
-		output_signal_names = output_signal_names,
+		output_signal_names = output_signal_names, # type: PMap_[SignalId, str]
 		output_signals = m() # type: PMap_[SignalId, Signal] 
 
 
@@ -243,7 +245,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		old_plot_state = plots[target_id]
 
 		# Demo
-		signal_data = state.data.outputs if action.id_ == PLOT_2_ID else state.data.signals
+		signal_data = state.data.output_signals if action.id_ == PLOT_2_ID else state.data.signals
 		new_plot_state = update_plot(old_plot_state, signal_data, action)
 		# End Demo
 		# new_plot_state = update_plot(old_plot_state, state.data.signals, action)
@@ -298,16 +300,19 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 			emit( action.replace(id_=PLOT_2_ID ) )
 
-
+	elif type(action) == FilterBoxAction and action.is_UnsetFilter():
+		emit( PlotAction.SetEmpty(id_=PLOT_2_ID) )
+		
 	if (new_state != None
 		and state.plots[PLOT_2_ID].is_Empty()
 		and is_filter_box_full(state.filter_boxes[FILTER_BOX_ID])
-		and str(FILTER_BOX_ID) in state.data.outputs.keys()
-		):
+		and state.data.output_ids[FILTER_BOX_ID] in state.data.output_signals
+		and state.data.output_signals[state.data.output_ids[FILTER_BOX_ID]] != None
+	   ):
 			emit(
 				PlotAction.SelectSignal(
 					id_=PLOT_2_ID,
-					signal_id=str(FILTER_BOX_ID))
+					signal_id=state.data.output_ids[FILTER_BOX_ID])
 			)
 	# End Demo
 
@@ -322,12 +327,19 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 @effectful(SIGNAL_ID)
 def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
+
 	if type(command) == FileEffect:
 
-		new_signals, new_signal_names = handle_file_effect(state.data.signals, command)
+		new_signals, new_signal_names = handle_file_effect(state.data.signals, state.data.signal_names, command)
 
 		data = state['data']
-		return state.set('data', data.set('signals', new_signals))
+
+		return state.set('data', data \
+									.set('signals',      new_signals)
+									.set('signal_names', new_signal_names)
+						) \
+		
+			
 
 	elif type(command) == FilterBoxEffect:
 		filter_box_id = command.id_
@@ -336,11 +348,13 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		o_output = handle_filter_box_effect(filter_box_state, state.data.signals, command)
 
 		# Demo
-		output_id = str(filter_box_id)
+		output_id = state.data.output_ids[filter_box_id]
 
 		data    = state['data']
-		outputs = data['outputs']
-		return state.set('data', data.set('outputs', outputs.set(output_id, o_output) ))
+		output_signals = data['output_signals']
+		return \
+			state\
+			.set('data', data.set('output_signals', output_signals.set(output_id, o_output) ))
 		# End Demo
 
 		# data    = state['data']
@@ -370,18 +384,18 @@ def draw() -> Eff(ACTIONS)[None]:
 		if im.button("load example"):
 			emit( FileAction.Load(filename=example_file_path) )
 
-		signals = state.data.signals
-		if len(signals) > 0:
-			labels = sorted(signals.keys())
+
+		if len(state.data.signals) > 0:
 
 			def right_pad(s: str, limit: int) -> str:
 				n_spaces = max(0, limit-len(s))
 				return s + (' ' * n_spaces)
 
-			for label in labels:
-				im.text_colored(right_pad(label,5), 0.2, 0.8, 1)
+			for sig_id, sig_name in sorted(state.data.signal_names.items(), key=lambda pair: pair[1]):
+				im.text_colored(right_pad(sig_name,5), 0.2, 0.8, 1)
 				im.same_line()
-				im.text(str(signals[label]))
+				signal = state.data.signals[sig_id]
+				im.text(str(signal))
 		else:
 			im.text("No signals loaded")
 
@@ -411,20 +425,30 @@ def draw() -> Eff(ACTIONS)[None]:
 	# ----------------------------
 
 
+	# state.data:
+		# signals = m(),       # type: PMap_[SignalId, Signal]
+		# signal_names = m(),   # type: PMap_[SignalId, str]
+
+		# output_ids = output_ids, # type: PMap_[Id, SignalId]
+		# output_signal_names = output_signal_names,
+		# output_signals = m() # type: PMap_[SignalId, Signal] 
 
 
 	
 	# signal plot 1
-	signal_plot_window(state.plots[PLOT_1_ID], state.data.signals,
-					   ui_settings=ui['settings'])
+	signal_plot_window(state.plots[PLOT_1_ID],
+						state.data.signals, state.data.signal_names,
+						ui_settings=ui['settings'])
 
 	# filter box
-	filter_box_window(state.filter_boxes[FILTER_BOX_ID], state.data.signals,
-					  ui_settings=ui_settings)
+	filter_box_window(state.filter_boxes[FILTER_BOX_ID],
+						state.data.signals, state.data.signal_names,
+					  	ui_settings=ui_settings)
 
 	# signal plot 2
-	signal_plot_window(state.plots[PLOT_2_ID], state.data.outputs,
-					   ui_settings=ui['settings'])
+	signal_plot_window(state.plots[PLOT_2_ID],
+						state.data.output_signals, state.data.output_signal_names,
+						ui_settings=ui['settings'])
 
 
 

@@ -184,19 +184,41 @@ def filter_box_window(
 
 	with window(name="filter (id={id_})".format(id_=filter_box_state.id_)):
 
-		# signal selection combo
+
+		# signal selector
+
 		if len(signal_data) > 0:
-			signal_ids =  sorted(signal_data.keys())
-			o_signal_id = None if filter_box_state.connection_state.is_Disconnected() else  filter_box_state.connection_state.signal_id
-			changed, o_input_signal_id = str_combo_with_none("signal", o_signal_id , signal_ids)
+			signal_ids = signal_data.keys()
+			visible_signal_names = {sig_id: signal_names[sig_id] for sig_id in signal_ids}
+
+			# disambiguate signals with duplicate names
+			duplicated_signal_names = 	{sig_id: sig_name
+										 for (sig_id, sig_name) in visible_signal_names.items()
+										 if list(visible_signal_names.values()).count(sig_name) > 1
+									  	}
+			disambiguated_signal_names = 	{sig_id: "{name} ({id})".format(name=sig_name, id=sig_id)
+											 for (sig_id, sig_name) in duplicated_signal_names.items()
+										 	}
+			visible_signal_names.update(disambiguated_signal_names)
+			# now `visible_signal_names` is an invertible mapping
+
+			prev_o_input_signal_name = (None if filter_box_state.connection_state.is_Disconnected()
+										   else visible_signal_names[filter_box_state.connection_state.signal_id])
+			labels = sorted(visible_signal_names.values()) 
+			changed, o_input_signal_name = str_combo_with_none("channel", prev_o_input_signal_name, labels)
 			if changed:
-				if o_input_signal_id != None:
-					emit( Connect(id_=filter_box_state.id_, signal_id=o_input_signal_id) )
+				if o_input_signal_name != None:
+					# invert `visible_signal_names` to find the signal id
+					signal_name_to_id = {sig_name: sig_id for (sig_id, sig_name) in visible_signal_names.items()}
+					input_signal_id = signal_name_to_id[o_input_signal_name]
+					emit( Connect(id_=filter_box_state.id_, signal_id=input_signal_id) )
 				else:
 					emit( Disconnect(id_=filter_box_state.id_) )
-
 		else:
 			im.text("No signals available")
+
+
+
 
 		# filter type combo
 		filter_ids = sorted(available_filters.keys())
