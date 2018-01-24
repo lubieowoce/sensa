@@ -7,7 +7,7 @@ from typing import (
 )
 from types_util import (
 	PMap_, # PVector_,
-	Id,
+	Id, SignalId,
 	NDArray,
 	IMGui, Actions,
 )
@@ -234,8 +234,9 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 
 @effectful(ACTIONS)
 def signal_plot_window(
-	plot_state: Dict[str, Any],
-	signal_data: Dict[str, Signal],
+	plot_state:  Dict[str, Any],
+	signal_data:  Dict[SignalId, Signal],
+	signal_names: Dict[SignalId, str],
 	ui_settings: Dict[str, Any]) -> Eff(ACTIONS)[IMGui[None]]:
 
 	emit = eff_operation('emit')

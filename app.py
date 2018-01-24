@@ -29,6 +29,7 @@ from eff import (
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
 	get_ids,
 	eff_operation,
+	get_signal_ids,
 )
 
 from imgui_widget import window
@@ -90,10 +91,12 @@ def sensa_app_init():
 
 
 	current_id = 0
+	current_signal_id = 0
 	
 	# create the initial state	
-	state, eff_res = run_eff(initial_state, id=current_id)()
-	current_id = eff_res[ID]
+	state, eff_res = run_eff(initial_state, id=current_id, signal_id=current_signal_id)()
+	current_id        = eff_res[ID]
+	current_signal_id = eff_res[SIGNAL_ID]
 
 	assert state != None
 
@@ -146,6 +149,7 @@ def draw_and_log_actions() -> IO_[None]:
 def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 	global state
 	global frame_actions
+	global current_signal_id
 
 	for act in frame_actions:
 		# note: `frame_actions` might be modified if `update` emits an action
@@ -155,7 +159,8 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
 		for command in eff_res[EFFECTS]:
-			state = handle(state, command)
+			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			current_signal_id = eff_res[SIGNAL_ID]
 
 
 
@@ -180,14 +185,29 @@ def sensa_post_frame():
 
 AppState = PMap_[str, Any]
 
-@effectful(ID)
-def initial_state() -> Eff(ID)[AppState]:
+@effectful(ID, SIGNAL_ID)
+def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
+	n_filter_boxes = 1
 
 	filter_boxes = pmap({id: initial_filter_box_state(id)
-					  		 for id in get_ids(1)})
+					  	 for id in get_ids(n_filter_boxes)})
+
+	output_ids = pmap({id: sig_id
+					   for (id, sig_id) in zip(filter_boxes.keys(),
+					  						   get_signal_ids(n_filter_boxes)) })
+	output_signal_names = pmap({sig_id: 'filter_{id}_output'.format(id=id) 
+								for (id, sig_id) in output_ids.items()})
+
 	data = m(
-		signals = m(),
-		outputs = pmap({str(id): None for id in filter_boxes.keys()})
+		signals = m(),       # type: PMap_[SignalId, Signal]
+		signal_names = m(),   # type: PMap_[SignalId, str]
+
+		output_ids = output_ids, # type: PMap_[Id, SignalId]
+		output_signal_names = output_signal_names,
+		output_signals = m() # type: PMap_[SignalId, Signal] 
+
+
+		# outputs = pmap({str(id): None for id in filter_boxes.keys()})
 	)
 
 	return m(
@@ -300,10 +320,11 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 # ------------------------
 
-
-def handle(state: AppState, command) -> IO_[AppState]:
+@effectful(SIGNAL_ID)
+def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 	if type(command) == FileEffect:
-		new_signals = handle_file_effect(state.data.signals, command)
+
+		new_signals, new_signal_names = handle_file_effect(state.data.signals, command)
 
 		data = state['data']
 		return state.set('data', data.set('signals', new_signals))

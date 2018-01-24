@@ -4,7 +4,7 @@ from typing import (
 	Dict, Optional,
 )
 from types_util import (
-	Id,
+	Id, SignalId,
 	PMap_,
 	IO_, IMGui, 
 )
@@ -38,7 +38,6 @@ FILTER_BOX_OUTPUT_SIGNAL_ID = 'filter_box_output'
 
 
 
-SignalId = str
 FilterId = str
 
 
@@ -175,7 +174,12 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 
 
 @effectful(ACTIONS)
-def filter_box_window(filter_box_state: FilterBoxState, signal_data: PMap_[str, Signal], ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
+def filter_box_window(
+	filter_box_state: FilterBoxState,
+	signal_data:  Dict[SignalId, Signal],
+	signal_names: Dict[SignalId, str],
+	ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
+
 	emit = eff_operation('emit')
 
 	with window(name="filter (id={id_})".format(id_=filter_box_state.id_)):

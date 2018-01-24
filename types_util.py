@@ -49,6 +49,9 @@ NonEmpty = Sequence
 WidgetState = PMap_[str, Any]
 
 Id = int
+SignalId = int
+
+
 Effect = PMap_[str, Any]
 
 Action = PMap_[str, Any]

@@ -1,7 +1,7 @@
 # from sensa_util import (err_unsupported_action)
 from typing import (
 	Any,
-	Dict,
+	Tuple, Dict,
 )
 from types_util import (
 	PMap_,
@@ -9,6 +9,22 @@ from types_util import (
 )
 from sensa_util import impossible
 from uniontype import union
+
+from eff import (
+	Eff, effectful,
+	EFFECTS, SIGNAL_ID, ACTIONS,
+	eff_operation,
+)
+from types_util import (
+	SignalId,
+)
+
+from eff import (
+	Eff, effectful,
+	SIGNAL_ID, 
+	eff_operation,
+	get_signal_ids,
+)
 
 from pyrsistent import m
 
@@ -36,14 +52,34 @@ FileAction, \
 
 
 
+@effectful(SIGNAL_ID)
+def handle_file_effect(signals: PMap_[SignalId, Signal],
+					   signal_names: PMap_[SignalId, str],
+					   command: FileEffect) -> IO_[ Tuple[ PMap_[SignalId, Signal],
+														   PMap_[SignalId, str]    ] ]:
 
-def handle_file_effect(signals: PMap_[str, Signal], command: FileEffect) -> IO_[PMap_[str, Signal]]:
 	if command.is_Load():
+
 		new_signals = load_edf(command.filename)
-		return signals.update(new_signals)
+		n_signals = len(new_signals)
+
+		# assign each signal a unique signal_id
+
+		# first, map ids to signal names
+		new_signal_names = {sig_id: name
+							for (sig_id, name)
+							in zip(get_signal_ids(n_signals),
+								   new_signals.keys())
+						   }
+		# then, map the ids to the correct signals
+		new_signals = {sig_id: new_signals[sig_name]
+					   for (sig_id, sig_name) in new_signal_names.items()}
+
+
+		return (signals.update(new_signals), signal_names.update(new_signal_names))
 	else:
 		impossible("Invalid File command:" + command)
-		return signals
+		return (signals, signal_names)
 
 
 def load_edf(filename: str) -> IO_[Dict[str, Signal]]:

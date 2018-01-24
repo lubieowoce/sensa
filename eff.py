@@ -4,7 +4,7 @@ from typing import (
 	Generic,
 )
 from types_util import (
-	Id, Effect,
+	Id, SignalId,
 	A,
 	Fun, 
 )
@@ -167,7 +167,7 @@ def is_in_eff() -> bool:
 
 def all_eff_operations_present(*effect_types) -> bool:
 	return (     all(builtins_flag_for_effect_type(eff_t) in dir(builtins) for eff_t in effect_types)
-		    and  all(      eff_type_operation_name[eff_t] in dir(builtins) for eff_t in effect_types))
+			and  all(      eff_type_operation_name[eff_t] in dir(builtins) for eff_t in effect_types))
 # --------------------------
 
 
@@ -186,6 +186,29 @@ def eff_operation(name: str) -> Fun[..., Any]:
 
 
 # -------------------
+
+@effectful(SIGNAL_ID)
+def get_signal_ids(n: int) -> Eff(SIGNAL_ID)[List[SignalId]]:
+	get_signal_id = eff_operation('get_signal_id')
+
+	ids = []
+	for _ in range(n):
+		ids.append(get_signal_id())
+	return ids
+
+
+
+@effectful(ID)
+def get_ids(n: int) -> Eff(ID)[List[Id]]:
+	get_id = eff_operation('get_id')
+	
+	ids = []
+	for _ in range(n):
+		ids.append(get_id())
+	return ids
+
+
+# ============================
 
 @effectful(ID, EFFECTS)
 def f() -> Eff(ID, EFFECTS)[Dict[str, Id]]:
@@ -209,12 +232,9 @@ def g(key):
 	d[key] = zi
 	return d
 
-@effectful(ID)
-def get_ids(n: int) -> Eff(ID)[List[Id]]:
-    ids = []
-    for _ in range(n):
-        ids.append(get_id())
-    return ids
+
+
+
 
 
 
