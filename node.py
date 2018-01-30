@@ -75,19 +75,20 @@ def update_trans_node(node_state: TransState, action: TransAction) -> TransState
 			return node_state
 
 
+# OutputNodeAction
 
-NodeEffect, \
+OutputNodeEffect, \
 	CreateBlankOutput, \
 	RemoveOutput, \
 = union(
-'NodeEffect', [
+'OutputNodeEffect', [
 	('CreateBlankOutput', [('output_id', SignalId)]), # when a node is created
 	('RemoveOutput',      [('output_id', SignalId)]), # when a node is removed
 ]
 )
 
-def handle_node_effect(
+def handle_output_node_effect(
 	output_signals: PMap_[SignalId, Signal],
-	command: NodeEffect) ->  PMap_[SignalId, Signal]:
+	command: OutputNodeEffect) ->  PMap_[SignalId, Signal]:
 
 	return output_signals.set(command.output_id, SignalOutput.NotReady())

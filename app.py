@@ -35,7 +35,7 @@ from eff import (
 from imgui_widget import window
 
 from node import (
-	handle_node_effect, NodeEffect,
+	handle_output_node_effect, OutputNodeEffect,
 )
 
 from signal_source import (
@@ -52,6 +52,8 @@ from filter_box import (
 	filter_box_window, 
 	# is_filter_box_full,
 )
+
+from filters import available_filters
 
 from plot import (
 	initial_plot_box_state,
@@ -128,8 +130,9 @@ def sensa_app_init():
 
 
 	# Demo
-	global SOURCE_BOX_ID, FILTER_BOX_ID, PLOT_1_ID, PLOT_2_ID
-	FILTER_BOX_ID = min(state.filter_boxes.keys())
+	global SOURCE_BOX_ID, FILTER_BOX_1_ID, FILTER_BOX_2_ID, PLOT_1_ID, PLOT_2_ID
+	FILTER_BOX_1_ID = min(state.filter_boxes.keys())
+	FILTER_BOX_2_ID = max(state.filter_boxes.keys())
 	SOURCE_BOX_ID = min(state.source_boxes.keys())
 	PLOT_1_ID = min(state.plots.keys())
 	PLOT_2_ID = max(state.plots.keys())
@@ -157,7 +160,6 @@ def draw_and_log_actions() -> IO_[None]:
 	# writing to frame_actions is the only way to communicate
 	# with the rest of our code
 
-	debug_log('frame actions 1', list(frame_actions))
 
 
 
@@ -168,7 +170,7 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 	global frame_actions
 	global current_signal_id
 
-	debug_log('frame actions 2', list(frame_actions))
+
 
 	for act in frame_actions:
 		# note: `frame_actions` might be modified if `update` emits an action
@@ -177,12 +179,15 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 
 		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
+		debug_log('effects', eff_res[EFFECTS])
 		for command in eff_res[EFFECTS]:
 			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			current_signal_id = eff_res[SIGNAL_ID]
 
-	debug_log_dict('state', state)
-	debug_log_dict('state.data', state.data)
+	if len(frame_actions) > 0:
+		debug_log('actions', list(frame_actions))
+		
+	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
 
 def sensa_post_frame():
 	global state
@@ -227,9 +232,9 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 	n_source_boxes = 1
 	source_boxes = pmap({box.id_: box
 					  	 for box in (initial_source_state() for _ in range(n_source_boxes))})
-	n_filter_boxes = 1
+	# n_filter_boxes = 2
 	filter_boxes = pmap({box.id_: box
-					  	 for box in (initial_filter_box_state(filter_id='lowpass') for _ in range(n_filter_boxes))})
+					  	 for box in (initial_filter_box_state(filter_id=filter_id) for filter_id in available_filters.keys())})
 	n_plots = 2
 	plots = pmap({plot.id_: plot
 				  for plot in (initial_plot_box_state() for _ in range(n_plots))})
@@ -247,7 +252,8 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 SOURCE_BOX_ID = None
 PLOT_1_ID = None
 PLOT_2_ID = None
-FILTER_BOX_ID = None
+FILTER_BOX_1_ID = None
+FILTER_BOX_2_ID = None
 # End Demo
 
 # --------------------
@@ -387,8 +393,8 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 			state\
 			.set('data', data.set('output_signals', output_signals.set(output_signal_id, output_signal) ))
 
-	elif type(command) == NodeEffect:
-		new_output_signals = handle_node_effect(state.data.output_signals, command)
+	elif type(command) == OutputNodeEffect:
+		new_output_signals = handle_output_node_effect(state.data.output_signals, command)
 		
 		data    = state['data']
 		return \
@@ -428,6 +434,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	im.show_metrics_window()
+
 
 	# ------------------------
 
@@ -492,8 +499,13 @@ def draw() -> Eff(ACTIONS)[None]:
 						state.data.output_signals,
 						ui_settings=ui['settings'])
 
-	# filter box
-	filter_box_window(state.filter_boxes[FILTER_BOX_ID],
+	# filter box 1
+	filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
+						state.data.output_signals,
+					  	ui_settings=ui_settings)
+
+	# filter box 2
+	filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
 						state.data.output_signals,
 					  	ui_settings=ui_settings)
 

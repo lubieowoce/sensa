@@ -19,7 +19,7 @@ from eff import (
 from uniontype import union
 
 from node import (
-	SignalOutput, NodeEffect
+	SignalOutput, OutputNodeEffect
 )
 
 from eeg_signal import Signal
@@ -70,7 +70,7 @@ def initial_source_state():
 
 	id_ = get_id()
 	output_id = get_signal_id()
-	emit_effect( NodeEffect.CreateBlankOutput(output_id=output_id) )
+	emit_effect( OutputNodeEffect.CreateBlankOutput(output_id=output_id) )
 	return SourceState.Empty(id_=id_, output_id=output_id)
 
 

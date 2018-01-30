@@ -24,7 +24,7 @@ from node import (
 	TransState,
 	TransAction, 
 	update_trans_node,
-	SignalOutput, NodeEffect,
+	SignalOutput, OutputNodeEffect,
 )
 
 from eeg_signal import Signal
@@ -98,7 +98,7 @@ def initial_filter_box_state(filter_id: FilterId) -> Eff(ID, SIGNAL_ID, EFFECTS)
 
 	id_ = get_id()
 	output_id = get_signal_id()
-	emit_effect( NodeEffect.CreateBlankOutput(output_id=output_id) )
+	emit_effect( OutputNodeEffect.CreateBlankOutput(output_id=output_id) )
 
 	state = FilterBoxState(
 		id_=id_,
