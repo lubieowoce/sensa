@@ -23,12 +23,13 @@ from types_util import (
 from imgui_widget import window #, group, child
 
 from sensa_util import (
-	uniform_dict_type, uniform_sequence_type,
+	uniform_dict_type, uniform_sequence_type, is_sequence_uniform,
 	dict_to_function,
 	get_mouse_position,
 	parts_of_len,
 )
 
+from functools import reduce
 
 from flags import DEBUG 
 
@@ -99,7 +100,7 @@ def debug_log(name: str, val: A) -> Debug[None]:
 
 
 
-def debug_log_dict(name: str, dictionary: Dict[str, Any]) -> Debug[None]:
+def debug_log_dict(name: str, dictionary: Dict[A, Any]) -> Debug[None]:
 	if not DEBUG:
 		return
 	debug_dict['dicts'][name] = dictionary
@@ -136,6 +137,8 @@ def debug_window() -> IMGui[None]:
 		# print the values in dicts logged with `debug_log_dict`
 		for name, dictionary in debug_dict['dicts'].items():
 			im.new_line()
+			# d = order_dict_by_key(stringify_keys(flatten_dict(dictionary)))
+
 			show_varied_dict(dictionary, name=name)
 
 
@@ -211,6 +214,8 @@ debug_set_type_format_string(float, "{:5.1f}")
 
 
 
+NESTED_VALUE_INDENT = 4
+
 
 def show_varied_dict(dictionary: Dict[str, Any],
 					 key_format_string_for_len:    Fun[[int], str ] = default_key_format_string_for_len,
@@ -228,17 +233,34 @@ def show_varied_dict(dictionary: Dict[str, Any],
 
 
 
-def varied_dict_to_str(dictionary: Dict[str, Any],
+def varied_dict_to_str(dictionary: Dict[A, Any],
 					   key_format_string_for_len:    Fun[[int], str ] = default_key_format_string_for_len,
-					   value_format_string_for_type: Fun[[type], str] = default_value_format_string_for_type) -> str:
+					   value_format_string_for_type: Fun[[type], str] = default_value_format_string_for_type
+					   ) -> str:
+	assert is_dictlike(dictionary)
 	if len(dictionary) == 0:
-		return ''
+		return '_'
 	else:
-		max_key_len = max(  (len(name) for name in dictionary.keys())  , default=0)
-		key_format_string = key_format_string_for_len(max_key_len)
+		# max_key_len = max(  (len(name) for name in dictionary.keys())  , default=0)
+		# key_format_string = key_format_string_for_len(max_key_len)
 		# im.new_line()
-		return str.join('\n',  ( key_format_string.format(k) + value_format_string_for_type(type(v)).format(v)
-							     for k, v in dictionary.items()  )                                              ) 
+		sorted_dictionary = order_and_stringify_keys(dictionary)
+
+		# reprs = (key_format_string.format(k) + value_format_string_for_type(type(v)).format(v)
+		reprs = (k + ': ' + value_format_string_for_type(type(v)).format(v)
+				 if is_not_mapping(v)
+				 else k + ':\n' \
+ 					  + indent_multiline_str(
+ 					  		varied_dict_to_str(
+ 					  			to_dictlike(v),
+ 							 	key_format_string_for_len,
+ 							 	value_format_string_for_type
+ 							 ),
+ 					  		NESTED_VALUE_INDENT
+ 					  	)
+
+				 for k, v in sorted_dictionary.items())
+		return str.join('\n',  reprs)                                             
 
 
 
@@ -318,7 +340,7 @@ def sequence_to_str(seq: Sequence[A],
 
 
 def name_and_multiline_str(name: str, multiline_str: str) -> str:
-	return name + ':' + '\n' + indent_multiline_str(multiline_str, 4)
+	return name + ':' + '\n' + indent_multiline_str(multiline_str, NESTED_VALUE_INDENT)
 
 
 def indent_str(string: str, indent: int) -> str:
@@ -394,3 +416,103 @@ def average_durations(range_duration_histories_ms: Dict[str, Sequence[float]]) -
 		     if range_duration_histories_ms[range_name] != None               }
 
 	return avgs
+
+
+
+
+
+
+def is_namedtuple(x): return isinstance(x, tuple) and hasattr(x, '_asdict')
+
+def is_union(x): return is_namedtuple(x) and hasattr(x, 'id__') and hasattr(x, 'val__')
+
+def is_dictlike(x): return hasattr(x, 'keys') and hasattr(x, 'values')
+def is_not_dictlike(x): return not is_dictlike(x)
+
+def is_mapping(x): return is_dictlike(x) or is_namedtuple(x) or is_union(x)
+def is_not_mapping(x): return not is_mapping(x)
+
+def to_dictlike(x): 
+	assert is_mapping(x)
+	if is_union(x):
+		res = OrderedDict()
+		res['@'] = x.get_variant_name()
+		res.update(x.as_dict())
+		return res
+
+	if is_namedtuple(x):
+		res = OrderedDict()
+		res['#'] = type(x).__name__
+		res.update(x._asdict())
+		return res
+	elif is_dictlike(x):
+		return x
+	else:
+		return x
+
+
+
+
+def order_and_stringify_keys(d):
+	if len(d) == 0:
+		return d
+
+	if type(d) != OrderedDict: # no ordering yet
+		d = order_dict_by_key(d)
+		
+	if type(list(d.keys())[0]) != str:
+		d = stringify_ordered_dict_keys(d)
+	
+	return d
+
+
+def stringify_ordered_dict_keys(d):
+	return OrderedDict([(str(k), v) for (k, v) in d.items()])
+
+def order_dict_by_key(d: Dict[str, A]):
+	return OrderedDict(sorted([(k, v) for (k, v) in d.items()], key=lambda p: p[0]))
+
+
+# def dict_union(a, b):
+# 	res = {}
+# 	res.update(a)
+# 	res.update(b)
+# 	return res
+
+# def dict_union_all(ds): return reduce(dict_union, ds, initial={})
+	
+# def filter_dict(pred, d): return {k: v for (k, v) in d.items() if pred(v)}
+
+# # fnd({'a': 5}) -> {'a': 5}
+# # fnd({'a': 5, 'b': {'x': 5, 'y': 7} }) -> {'a': 5. 'b.x': 5, 'b.y': 7}
+
+# # fnd -> {'a.x': 5, 'a.y': 7, 'b.x': 5, 'b.y': 7}({'a': {'x':5, 'y': 7},
+# #      'b': {'x': 5, 'y': 7} })
+
+# # fnd({'a': {'x':5, 'y': 7, 'd': {'x': 10} },
+# #      'b': {'x': 5, 'y': 7} }) -> {'a.x': 5, 'a.y': 7, 'a.d.x': 10, 'b.x': 5, 'b.y': 7}
+
+# # { 'a': {'x':5, 'y': 7, 'd': {'x': 10} },   'b': {'x': 5, 'y': 7} }
+
+# def flatten_dict(d):
+# 	flat_items     = filter_dict(is_not_dictlike, d)
+# 	dictlike_items = filter_dict(is_dictlike, d)
+# 	if len(dictlike_items) == 0:
+# 		assert all(is_not_dictlike(v) for (k, v) in d.items())
+# 		return d
+# 	else: # some items need flattening
+# 		assert all(is_dictlike(v) for (k, v) in dictlike_items.items())
+# 		flattened_dictlike_items = {k: flatten_dict(dct) for (k, dct) in dictlike_items.items()}
+# 		assert all(is_not_dictlike(v) for (name, dct) in flattened_dictlike_items.items()
+# 									     for (k, v) in dct.items())
+# 		flattened = {name+'.'+str(k) : v for (name, dct) in flattened_dictlike_items.items()
+# 										for (k, v) in dct.items()}
+
+# 		res = dict_union(flat_items, flattened)
+# 		assert all(is_not_dictlike(v) for (k, v) in res.items())
+# 		return res
+
+
+
+
+	

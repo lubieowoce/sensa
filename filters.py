@@ -3,7 +3,7 @@ from typing import (
 )
 
 from pyrsistent import m, pmap
-
+from collections import OrderedDict
 from functools import partial as part
 # import numpy as np
 from scipy.signal import butter, lfilter
@@ -50,10 +50,10 @@ highpass_filter = part(simple_filter, type='high')
 highpass_tr = Trans('Highpass filter', highpass_filter, highpass_filter_sig)
 
 
-available_filters = {
-	'lowpass':  lowpass_tr,
-	'highpass': highpass_tr,
-}
+available_filters = OrderedDict([
+	('highpass', highpass_tr),
+	('lowpass',  lowpass_tr),
+])
 
 default_parameters = {
 	'lowpass': lowpass_default_params,

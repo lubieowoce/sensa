@@ -184,10 +184,18 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			current_signal_id = eff_res[SIGNAL_ID]
 
+	# Debug
 	if len(frame_actions) > 0:
 		debug_log('actions', list(frame_actions))
-		
+
 	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
+
+	connections = {id_: box.connection_state
+					for box_type in ['filter_boxes', 'plots']
+						for (id_, box) in state[box_type].items() }
+	connections.update({id_: connection_state for (id_, connection_state) in state['source_boxes'].items()})
+	debug_log_dict('connections', connections)
+	# End Debug
 
 def sensa_post_frame():
 	global state
