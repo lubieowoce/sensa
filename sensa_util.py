@@ -16,12 +16,12 @@ import builtins
 # from functools import partial
 from itertools import islice
 from collections import namedtuple
+from pyrsistent import pmap
 
 import imgui as im
 from imgui import Vec2
 
 import flags
-
 
 def impossible(msg):
 	raise Exception("Internal error: " + msg)
@@ -151,11 +151,29 @@ def dict_to_function(dictionary: Dict[K, A]) -> Fun[[K], A]:
 
 
 
+def is_sequence_unique(seq: Sequence[A]) -> bool:
+	seen = set()
+	for x in seq:
+		if x in seen:
+			return False
+		seen.add(x)
+	# ran through list without seeing same value twice	
+	return True
+	
+
+def invert(d: PMap_[A, B]) -> PMap_[B, A]:
+	assert is_sequence_unique(d.values()), d+" has duplicate values, so it's not invertible"
+
+	return pmap({val: key for (key, val) in d.items()})
+
+
+
 def is_sequence_uniform(seq: Sequence[Any]) -> bool:
 	if len(seq) == 0:
 		return True
 	else: # list has values
 		return sequence_type(sequence).is_right
+
 
 
 

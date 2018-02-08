@@ -237,7 +237,9 @@ def varied_dict_to_str(dictionary: Dict[A, Any],
 					   key_format_string_for_len:    Fun[[int], str ] = default_key_format_string_for_len,
 					   value_format_string_for_type: Fun[[type], str] = default_value_format_string_for_type
 					   ) -> str:
+	dictionary = dictionary if is_dictlike(dictionary) else to_dictlike(dictionary) 
 	assert is_dictlike(dictionary)
+
 	if len(dictionary) == 0:
 		return '_'
 	else:
@@ -445,6 +447,7 @@ def to_dictlike(x):
 		res['#'] = type(x).__name__
 		res.update(x._asdict())
 		return res
+		
 	elif is_dictlike(x):
 		return x
 	else:

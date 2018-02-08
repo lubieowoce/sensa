@@ -37,6 +37,7 @@ from imgui_widget import window
 from node import (
 	handle_output_node_effect, OutputNodeEffect,
 )
+import node_graph
 
 from signal_source import (
 	initial_source_state,
@@ -173,8 +174,8 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 
 
 	for act in frame_actions:
+		
 		# note: `frame_actions` might be modified if `update` emits an action
-
 		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
 
 		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
@@ -250,6 +251,8 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 
 
 	return m(
+		graph = node_graph.test_graph,
+
 		data = data,
 		source_boxes = source_boxes,
 		plots = plots,
@@ -284,6 +287,9 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			source_boxes = state['source_boxes']
 			new_state = state.set('source_boxes', source_boxes.set(target_id, new_source_box_state))
 
+	if type(action) == node_graph.GraphAction:
+		graph = state.graph
+		new_state = state.set('graph', node_graph.update_graph(graph, action))
 
 	elif type(action) in FILTER_BOX_ACTION_TYPES:
 		debug_log('updating', 'filter box')
@@ -523,6 +529,7 @@ def draw() -> Eff(ACTIONS)[None]:
 						ui_settings=ui['settings'])
 
 
+	node_graph.graph_window(state.graph)
 
 	# debug_log_dict('ui', ui)
 	# debug_log_dict("first plot", state.plots[PLOT_1_ID].as_dict())
