@@ -123,25 +123,46 @@ def either(e: Either[A, B], l_fn: Fun[[A], R], r_fn: Fun[[A], R]) -> R:
 
 
 class Maybe(Generic[A]):
-	pass
+	__slots__ = ()
 
 class Nothing(Maybe):
+	__slots__ = ()
 	def __init__(nothing): pass
+
 	@property
 	def is_nothing(nothing): return True
+
+	def is_Nothing(nothing): return True
+
 	@property
 	def is_just(nothing):   return False
+
+	def is_Just(nothing):   return False
+
 	@property
 	def val(nothing): raise Exception("Tried to get value of Nothing")
+
 	def get_val(nothing): return None
 
 class Just(Maybe):
-	def __init__(just, val): just.val = val
+	__slots__ = ('_val',)
+	def __init__(just, val): just._val = val
+
 	@property
+
 	def is_nothing(just): return False
+
+	def is_Nothing(just): return False
+
 	@property
 	def is_just(just):    return True
-	def get_val(just): return just.val
+
+	def is_Just(just):    return True
+
+	@property
+	def val(just): return just._val
+
+	def get_val(just): return just._val
 
 
 

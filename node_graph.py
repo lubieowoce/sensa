@@ -1,4 +1,4 @@
-from typing import Any, Set, NamedTuple
+from typing import Any, Set, List, Dict, NamedTuple
 
 from types_util import (
 	Id, SignalId,
@@ -6,10 +6,10 @@ from types_util import (
 )
 from collections import namedtuple
 from uniontype import union
-from pyrsistent import s, m
+from pyrsistent import s, m, pmap, pvector
 
 from functools import reduce
-from sensa_util import invert, impossible
+from sensa_util import invert, impossible, Maybe, Nothing, Just
 from eeg_signal import Signal
 # Source, Trans, Sink?
 
@@ -148,6 +148,9 @@ def free_input_slots(graph: Graph) -> Set[InputSlotId]:
 	return input_slots(graph) - filled_input_slots(graph)
 
 
+def node_inputs(graph: Graph, node_id: Id) -> List[OutputSlotId]:
+	return [src_slot for (src_slot, dst_slot) in graph.links
+			if dst_slot.node_id == node_id]
 
 
 def graph_repr(graph: Graph) -> str:
@@ -165,6 +168,61 @@ def graph_repr(graph: Graph) -> str:
 	return str.join('\n', connections_repr) + '\n\n' + unused_repr
 
 
+
+
+
+
+def apply_maybe_fn(m_fn, *m_args):
+	if any(m_arg.is_Nothing() for m_arg in m_args):
+		return Nothing()
+	if m_fn.is_Nothing():
+		return Nothing()
+	return Just(m_fn.val(*m_args))
+
+
+
+
+def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Dict[Id, Any]) -> Dict[Id, List[Maybe[Signal]]]:
+	res = {}
+	source_nodes = {id_: node for (id_, node) in graph.nodes.items()
+					if node.n_inputs == 0}
+	trans_nodes =  {id_: node for (id_, node) in graph.nodes.items()
+					if node.n_inputs > 0 and node.n_outputs > 0}
+	sink_nodes = {id_: node for (id_, node) in graph.nodes.items()
+					if node.n_outputs == 0}
+
+	for (id_, node) in source_nodes.items():
+		eval_node = type(boxes[id_]).eval_node # hacky - should use something like interfaces/typeclasses
+		m_output_values = apply_maybe_fn(eval_node(boxes[id_]), source_signals)
+		res[id_] = pvector(m_output_values.val if m_output_values.is_Just()
+						   else [Nothing() for _ in range(node.n_outputs)])
+
+
+	# filters that only depend on source signals
+	constant_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
+							if all(src_slot.node_id in source_nodes.keys() for src_slot in node_inputs(graph, id_))}
+	# filters that depend on at least one other filter
+	variable_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
+							if any(src_slot.node_id in trans_nodes.keys() for src_slot in node_inputs(graph, id_))}
+
+	for node_group in (constant_trans_nodes, variable_trans_nodes, sink_nodes):
+		for (id_, node) in node_group.items():
+			input_values = [ res[src_slot.node_id][src_slot.ix] for src_slot in node_inputs(graph, id_)]
+			eval_node = type(boxes[id_]).eval_node
+			m_output_values = apply_maybe_fn(eval_node(boxes[id_]), input_values)
+			res[id_] = pvector(m_output_values.val if m_output_values.is_Just()
+							   else [Nothing() for _ in range(node.n_outputs)])
+
+	return pmap(res)
+
+
+
+
+def get_inputs(graph: Graph, output_values: Dict[Id, List[Maybe[Signal]]]) -> Dict[Id, List[Maybe[Signal]]]:
+	return \
+		{ id_: [ output_values[src_slot.node_id][src_slot.ix]
+			    for src_slot in node_inputs(graph, id_) ]
+		  for (id_, node) in  graph.nodes.items() }
 
 
 

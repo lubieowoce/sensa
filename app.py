@@ -219,23 +219,12 @@ def sensa_post_frame():
 
 AppState = PMap_[str, Any]
 
-@effectful(ID, SIGNAL_ID, EFFECTS)
-def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
+@effectful(ID, ACTIONS)
+def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 
 	# output_signal_names = pmap({sig_id: 'filter_{id}_output'.format(id=id) 
 	# 							for (id, sig_id) in output_ids.items()})
 
-	data = m(
-		signals = m(),       # type: PMap_[SignalId, Signal]
-		signal_names = m(),   # type: PMap_[SignalId, str]
-
-		# output_ids = m(), # type: PMap_[Id, SignalId]
-		# output_signal_names = output_signal_names, # type: PMap_[SignalId, str]
-		output_signals = m() # type: PMap_[SignalId, SignalOutput] 
-
-
-		# outputs = pmap({str(id): None for id in filter_boxes.keys()})
-	)
 
 
 	n_source_boxes = 1
@@ -251,9 +240,13 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 
 
 	return m(
-		graph = node_graph.test_graph,
+		graph = node_graph.empty_graph,
 
-		data = data,
+		data = m(
+			signals = m(),      # type: PMap_[SignalId, Signal]
+			signal_names = m(), # type: PMap_[SignalId, str]
+			box_inputs = m()    # type: PMap_[Id, SignalOutput] 
+	    ),
 		source_boxes = source_boxes,
 		plots = plots,
 		filter_boxes = filter_boxes,
