@@ -1,12 +1,12 @@
 import typing
 from typing import (
 	Any,
-	Dict, Optional, List, Union, Fun
+	Dict, Optional, List, Union
 )
 from types_util import (
 	Id, SignalId,
 	PMap_,
-	IO_, IMGui, 
+	Fun, IO_, IMGui, 
 )
 from pyrsistent import PMap, m
 
@@ -74,13 +74,13 @@ FilterAction, \
 
 
 FilterBoxState = typing.NamedTuple('FilterBoxState', [('id_', Id),
-													  ('filter_state',     FilterState)])
+													  ('filter_state', FilterState)])
 
 
-def eval_node(filter_box: FilterBoxState) -> Maybe[ Fun[[List[Signal]], List[Signal]] ]:
-	return Just( chain(	lambda signals: signals[0],
-						transformation(filter_box.filter_state),
-						lambda signal: [signal]) )
+def eval_node(filter_box: FilterBoxState) -> Fun[[List[Signal]], Maybe[List[Signal]]] :
+	return chain(lambda signals: signals[0],
+				transformation(filter_box.filter_state),
+				lambda signal: Just([signal])) 
 
 
 def transformation(filter_state: FilterState) -> Signal:
@@ -160,7 +160,7 @@ def filter_box_window(
 	ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
 
 	emit = eff_operation('emit')
-	name = "Filter (id={id}, out={out})".format(id=filter_box_state.id_, out=filter_box_state.connection_state.output_id)
+	name = "Filter (id={id})".format(id=filter_box_state.id_)
 	with window(name=name):
 
 

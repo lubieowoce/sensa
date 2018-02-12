@@ -1,11 +1,11 @@
 import typing
 from typing import (
-	Any, List, Dict, Optional, Union, Fun
+	Any, List, Dict, Optional, Union, 
 )
 from types_util import (
 	Id, SignalId,
 	PMap_,
-	IO_, IMGui, 
+	Fun, IO_, IMGui, 
 )
 from sensa_util import impossible, Maybe, Nothing, Just
 
@@ -40,8 +40,8 @@ SourceState, \
 ]
 )
 
-def eval_node(src) -> Maybe[ Fun[[Dict[SignalId, Signal]], List[Signal] ] ]:
-	return lambda signals: (Just([signals[src.signal_id]]) if src.is_Full() else Nothing())
+def eval_node(src) -> Fun[ [Dict[SignalId, Signal]], Maybe[List[Signal]] ]:
+	return  lambda signals: Just([signals[src.signal_id]]) if src.is_Full() else Nothing()
 
 def to_node(src) -> ng.Node:
 	return ng.Node(n_inputs=0, n_outputs=1)
@@ -70,6 +70,7 @@ def initial_source_state():
 	id_ = get_id()
 	state = SourceState.Empty(id_=id_)
 	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	return state
 
 
 
@@ -80,10 +81,10 @@ def update_source(source_state: SourceState, action: SourceAction) -> Eff(ACTION
 	old_state = source_state
 
 	if action.is_SetEmpty():
-		return Empty(id_=old_state.id_, output_id=old_state.output_id)
+		return Empty(id_=old_state.id_)
 
 	elif action.is_SelectSignal():
-		return Full(id_=old_state.id_, signal_id=action.signal_id, output_id=old_state.output_id)
+		return Full(id_=old_state.id_, signal_id=action.signal_id)
 	else:
 		impossible("Unsupported action: "+action)
 		return old_state
@@ -99,7 +100,7 @@ def signal_source_window(
 	emit = eff_operation('emit')
 
 
-	source_name = "Source (id={id}, out={out})".format(id=source_state.id_, out=source_state.output_id)
+	source_name = "Source (id={id})".format(id=source_state.id_)
 
 	with window(name=source_name):
 

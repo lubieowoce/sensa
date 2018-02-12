@@ -9,7 +9,7 @@ from uniontype import union
 from pyrsistent import s, m, pmap, pvector
 
 from functools import reduce
-from sensa_util import invert, impossible, Maybe, Nothing, Just
+from sensa_util import invert, impossible, Maybe, Nothing, Just, assert_all
 from eeg_signal import Signal
 # Source, Trans, Sink?
 
@@ -69,8 +69,10 @@ GraphAction, \
 ]
 )
 
+@effectful(EFFECTS)
+def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
+	emit_effect = eff_operation('emit_effect')
 
-def update_graph(graph: Graph, action: GraphAction) -> Graph:
 	nodes, links = graph.nodes, graph.links
 	old_graph = graph
 
@@ -108,22 +110,26 @@ def update_graph(graph: Graph, action: GraphAction) -> Graph:
 		impossible("Invalid graph action")
 
 
-	return new_graph if new_graph is not old_graph else old_graph
+	if new_graph is not old_graph:
+		emit_effect(EvalGraph())
+		return new_graph
+	else:
+		return old_graph
 
 
 
-test_actions = [
-AddNode(0, Node(n_inputs=0, n_outputs=1)),
-AddNode(1, Node(n_inputs=1, n_outputs=2)),
-AddNode(2, Node(n_inputs=2, n_outputs=0)),
-AddNode(3, Node(n_inputs=1, n_outputs=0)),
+# test_actions = [
+# AddNode(0, Node(n_inputs=0, n_outputs=1)),
+# AddNode(1, Node(n_inputs=1, n_outputs=2)),
+# AddNode(2, Node(n_inputs=2, n_outputs=0)),
+# AddNode(3, Node(n_inputs=1, n_outputs=0)),
 
-# Connect(OutputSlotId(node_id=0, ix=0), InputSlotId(node_id=1, ix=0)),
-# Connect(OutputSlotId(node_id=0, ix=0), InputSlotId(node_id=3, ix=0)),
-# Connect(OutputSlotId(node_id=1, ix=0), InputSlotId(node_id=2, ix=0)),
-# Connect(OutputSlotId(node_id=1, ix=1), InputSlotId(node_id=2, ix=1)),
-]
-test_graph = reduce(update_graph, test_actions, empty_graph)
+# # Connect(OutputSlotId(node_id=0, ix=0), InputSlotId(node_id=1, ix=0)),
+# # Connect(OutputSlotId(node_id=0, ix=0), InputSlotId(node_id=3, ix=0)),
+# # Connect(OutputSlotId(node_id=1, ix=0), InputSlotId(node_id=2, ix=0)),
+# # Connect(OutputSlotId(node_id=1, ix=1), InputSlotId(node_id=2, ix=1)),
+# ]
+# test_graph = reduce(update_graph, test_actions, empty_graph)
 
 
 
@@ -147,11 +153,23 @@ def filled_input_slots(graph: Graph) -> Set[InputSlotId]:
 def free_input_slots(graph: Graph) -> Set[InputSlotId]:
 	return input_slots(graph) - filled_input_slots(graph)
 
-
-def node_inputs(graph: Graph, node_id: Id) -> List[OutputSlotId]:
-	return [src_slot for (src_slot, dst_slot) in graph.links
+def parent_nodes(graph: Graph, node_id: Id) -> List[Id]:
+	return [src_slot.node_id
+			for (src_slot, dst_slot) in graph.links
 			if dst_slot.node_id == node_id]
 
+
+
+def slot_sources(graph: Graph, node_id: Id) -> List[Maybe[OutputSlotId]]:
+	res = [Nothing() for ix in range(graph.nodes[node_id].n_inputs)]
+	for (src_slot, dst_slot) in graph.links:
+		if dst_slot.node_id == node_id:
+			res[dst_slot.ix] = Just(src_slot)
+
+	return res
+
+
+# def node_input_slots
 
 def graph_repr(graph: Graph) -> str:
 	connections_repr = \
@@ -193,25 +211,52 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 
 	for (id_, node) in source_nodes.items():
 		eval_node = type(boxes[id_]).eval_node # hacky - should use something like interfaces/typeclasses
-		m_output_values = apply_maybe_fn(eval_node(boxes[id_]), source_signals)
-		res[id_] = pvector(m_output_values.val if m_output_values.is_Just()
+		m_output_values = eval_node(boxes[id_])(source_signals)
+		res[id_] = pvector(map(Just, m_output_values.val)
+						   if m_output_values.is_Just()
 						   else [Nothing() for _ in range(node.n_outputs)])
+		# DEBUG
+		assert_all(res[id_], lambda m_val: (type(m_val.val) == Signal) if m_val.is_Just() else True)
+		# END DEBUG
 
 
 	# filters that only depend on source signals
 	constant_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
-							if all(src_slot.node_id in source_nodes.keys() for src_slot in node_inputs(graph, id_))}
+							if all(node_id in source_nodes.keys() for node_id in parent_nodes(graph, id_))}
 	# filters that depend on at least one other filter
 	variable_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
-							if any(src_slot.node_id in trans_nodes.keys() for src_slot in node_inputs(graph, id_))}
+							if any(node_id in trans_nodes.keys() for node_id in parent_nodes(graph, id_))}
 
 	for node_group in (constant_trans_nodes, variable_trans_nodes, sink_nodes):
 		for (id_, node) in node_group.items():
-			input_values = [ res[src_slot.node_id][src_slot.ix] for src_slot in node_inputs(graph, id_)]
-			eval_node = type(boxes[id_]).eval_node
-			m_output_values = apply_maybe_fn(eval_node(boxes[id_]), input_values)
-			res[id_] = pvector(m_output_values.val if m_output_values.is_Just()
-							   else [Nothing() for _ in range(node.n_outputs)])
+
+			input_m_values = [m_src_slot >> (lambda src_slot: res[src_slot.node_id][src_slot.ix])
+							  for m_src_slot in slot_sources(graph, id_)]
+
+			# DEBUG
+			assert len(input_m_values) > 0, repr(id_) + " \n " + repr(node) + " \n " + repr(slot_sources(graph, id_))
+			assert_all(input_m_values, lambda m_val: (type(m_val.val) == Signal) if m_val.is_Just() else True)
+			# END DEBUG
+
+			# only run the transformation if all arguments are Just
+			if any(m_val.is_Nothing() for m_val in input_m_values):
+				res[id_] = pvector([Nothing() for _ in range(node.n_outputs)])
+			else:
+				eval_node = type(boxes[id_]).eval_node
+				input_values = [m_val.val for m_val in input_m_values]
+				m_output_values = eval_node(boxes[id_])(input_values)
+				res[id_] = pvector(map(Just, m_output_values.val)
+								   if m_output_values.is_Just()
+								   else [Nothing() for _ in range(node.n_outputs)])
+			# DEBUG
+			assert_all(res[id_], lambda m_val: (type(m_val.val) == Signal) if m_val.is_Just() else True)
+			# END DEBUG
+
+	# DEBUG
+	for id_, m_vals in res.items():
+		for m_val in m_vals:
+			assert ((type(m_val.val) == Signal) if m_val.is_Just() else True)
+	# END DEBUG
 
 	return pmap(res)
 
@@ -220,8 +265,8 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 
 def get_inputs(graph: Graph, output_values: Dict[Id, List[Maybe[Signal]]]) -> Dict[Id, List[Maybe[Signal]]]:
 	return \
-		{ id_: [ output_values[src_slot.node_id][src_slot.ix]
-			    for src_slot in node_inputs(graph, id_) ]
+		{ id_: [m_src_slot >> (lambda src_slot: output_values[src_slot.node_id][src_slot.ix])
+				for m_src_slot in slot_sources(graph, id_)]
 		  for (id_, node) in  graph.nodes.items() }
 
 
@@ -313,6 +358,23 @@ def graph_window(graph: Graph):
 		# ----------------------------------
 
 		im.text(graph_repr(graph))
+
+
+GraphEffect, \
+	EvalGraph, \
+= union(
+'GraphEffect', [
+	('EvalGraph', []),
+]
+)
+
+
+def handle_graph_effect(graph, source_signals, boxes, command: GraphEffect):
+
+	if command.is_EvalGraph():
+		return eval_outputs(graph, source_signals, boxes)
+
+
 
 
 # repl

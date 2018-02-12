@@ -34,22 +34,20 @@ from eff import (
 
 from imgui_widget import window
 
-from node import (
-	handle_output_node_effect, OutputNodeEffect,
-)
+# from node import (
+# 	handle_output_node_effect, OutputNodeEffect,
+# )
 import node_graph
 
 from signal_source import (
 	initial_source_state,
-	update_source,        SourceAction,
-	handle_source_effect, SourceEffect,
+	update_source, SourceAction,
 	signal_source_window,
 )
 
 from filter_box import (
 	initial_filter_box_state,
-	update_filter_box,        FILTER_BOX_ACTION_TYPES,
-	handle_filter_box_effect, FilterBoxEffect, 
+	update_filter_box, FILTER_BOX_ACTION_TYPES,
 	filter_box_window, 
 	# is_filter_box_full,
 )
@@ -106,10 +104,14 @@ def sensa_app_init():
 	current_signal_id = 0
 	
 	# create the initial state	
-	state, eff_res = run_eff(initial_state, id=current_id, signal_id=current_signal_id, effects=[])()
+	state, eff_res = run_eff(initial_state, id=current_id, actions=[])()
 	current_id        = eff_res[ID]
-	current_signal_id = eff_res[SIGNAL_ID]
-	for command in eff_res[EFFECTS]:
+	for action in eff_res[ACTIONS]:
+		state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
+
+		eff_res[ACTIONS].extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+
+		for command in eff_res[EFFECTS]:
 			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			current_signal_id = eff_res[SIGNAL_ID]
 
@@ -190,12 +192,6 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 		debug_log('actions', list(frame_actions))
 
 	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
-
-	connections = {id_: box.connection_state
-					for box_type in ['filter_boxes', 'plots']
-						for (id_, box) in state[box_type].items() }
-	connections.update({id_: connection_state for (id_, connection_state) in state['source_boxes'].items()})
-	debug_log_dict('connections', connections)
 	# End Debug
 
 def sensa_post_frame():
@@ -221,7 +217,7 @@ AppState = PMap_[str, Any]
 
 @effectful(ID, ACTIONS)
 def initial_state() -> Eff(ID, ACTIONS)[AppState]:
-
+	emit = eff_operation('emit')
 	# output_signal_names = pmap({sig_id: 'filter_{id}_output'.format(id=id) 
 	# 							for (id, sig_id) in output_ids.items()})
 
@@ -237,7 +233,9 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 	plots = pmap({plot.id_: plot
 				  for plot in (initial_plot_box_state() for _ in range(n_plots))})
 
-
+	for group in (source_boxes, filter_boxes, plots):
+		for (id_, box) in group.items():
+			emit(node_graph.AddNode(id_, box.to_node()))
 
 	return m(
 		graph = node_graph.empty_graph,
@@ -245,7 +243,7 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 		data = m(
 			signals = m(),      # type: PMap_[SignalId, Signal]
 			signal_names = m(), # type: PMap_[SignalId, str]
-			box_inputs = m()    # type: PMap_[Id, SignalOutput] 
+			box_outputs = m()    # type: PMap_[Id, Maybe[Signal]] 
 	    ),
 		source_boxes = source_boxes,
 		plots = plots,
@@ -269,6 +267,11 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 	emit = eff_operation('emit'); emit_effect = eff_operation('emit_effect')
 
 	new_state = None
+	o_changed_box = None
+
+	if type(action) == node_graph.GraphAction:
+		graph = state.graph
+		new_state = state.set('graph', node_graph.update_graph(graph, action))
 
 	if type(action) == SourceAction:
 		debug_log('updating', 'source')
@@ -279,10 +282,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		if not (old_source_box_state is new_source_box_state):
 			source_boxes = state['source_boxes']
 			new_state = state.set('source_boxes', source_boxes.set(target_id, new_source_box_state))
-
-	if type(action) == node_graph.GraphAction:
-		graph = state.graph
-		new_state = state.set('graph', node_graph.update_graph(graph, action))
+			o_changed_box = target_id
 
 	elif type(action) in FILTER_BOX_ACTION_TYPES:
 		debug_log('updating', 'filter box')
@@ -293,6 +293,8 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		if not (old_filter_box_state is new_filter_box_state):
 			filter_boxes = state['filter_boxes']
 			new_state = state.set('filter_boxes', filter_boxes.set(target_id, new_filter_box_state))
+			o_changed_box = target_id
+
 
 	elif type(action) in PLOT_BOX_ACTION_TYPES:
 		# state_e['plots'][target_id] = update_plot(plot_state, state_e['data'], __plot_draw_area__, action)
@@ -306,8 +308,8 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		new_plot_state = update_plot_box(old_plot_state, signal_data, action)
 
 		if not (old_plot_state is new_plot_state): # reference comparison for speed
-			new_state = state.set('plots', plots.set(target_id, new_plot_state)) 
-
+			new_state = state.set('plots', plots.set(target_id, new_plot_state))
+			# o_changed_box = target_id
 
 
 
@@ -316,6 +318,9 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			emit_effect( FileEffect.Load(action.filename) ) 
 
 
+	if o_changed_box != None:
+		# emit(node_graph.NodeChanged(id_=o_changed_box))
+		emit_effect(node_graph.EvalGraph())
 
 	return new_state if new_state != None else state
 
@@ -381,49 +386,21 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		new_signals, new_signal_names = handle_file_effect(state.data.signals, state.data.signal_names, command)
 
 		data = state['data']
-
 		return state.set('data', data \
 									.set('signals',      new_signals)
 									.set('signal_names', new_signal_names)
 						)
+	elif type(command) == node_graph.GraphEffect:
+		boxes = sum((state.source_boxes, state.filter_boxes, state.plots), m())
+		new_box_outputs = node_graph.handle_graph_effect(
+								graph=state.graph,
+								source_signals=state.data.signals,
+								boxes=boxes,
+								command=command
+						  )
 
-	elif  type(command) == SourceEffect:
-		source_box_id = command.id_
-		source_box_state = state.source_boxes[source_box_id]
-
-		output_signal_id = source_box_state.output_id
-		output_signal = handle_source_effect(source_box_state, state.data.signals, command)
-		
-		data    = state['data']
-		output_signals = data['output_signals']
-		return \
-			state\
-			.set('data', data.set('output_signals', output_signals.set(output_signal_id, output_signal) ))
-
-	elif type(command) == OutputNodeEffect:
-		new_output_signals = handle_output_node_effect(state.data.output_signals, command)
-		
-		data    = state['data']
-		return \
-			state\
-			.set('data', data.set('output_signals', new_output_signals))
-
-	elif type(command) == FilterBoxEffect: # Trans
-		filter_box_id = command.id_
-		filter_box_state = state.filter_boxes[filter_box_id]
-		output_signal_id  = filter_box_state.connection_state.output_id
-
-
-		output_signals = state.data.output_signals
-		m_output_signal = handle_filter_box_effect(filter_box_state, output_signals , command)
-
-
-		data    = state['data']
-		output_signals = data['output_signals']
-		return \
-			state\
-			.set('data', data.set('output_signals', output_signals.set(output_signal_id, m_output_signal) ))
-
+		data = state['data']
+		return state.set('data', data.set('box_outputs', new_box_outputs))  
 
 	else:
 		return state
@@ -489,36 +466,28 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	# ----------------------------
 
-
-	# state.data:
-		# signals = m(),       # type: PMap_[SignalId, Signal]
-		# signal_names = m(),   # type: PMap_[SignalId, str]
-
-		# output_ids = output_ids, # type: PMap_[Id, SignalId]
-		# output_signal_names = output_signal_names,
-		# output_signals = m() # type: PMap_[SignalId, Signal] 
+	inputs = node_graph.get_inputs(state.graph, state.data.box_outputs)
 
 	signal_source_window(state.source_boxes[SOURCE_BOX_ID],
-						 state.data.signals, state.data.signal_names)
+						 state.data.signals,
+						 state.data.signal_names)
 	
 	# signal plot 1
 	signal_plot_window(state.plots[PLOT_1_ID],
-						state.data.output_signals,
+						inputs,
 						ui_settings=ui['settings'])
 
 	# filter box 1
 	filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
-						state.data.output_signals,
 					  	ui_settings=ui_settings)
 
 	# filter box 2
 	filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
-						state.data.output_signals,
 					  	ui_settings=ui_settings)
 
 	# signal plot 2
 	signal_plot_window(state.plots[PLOT_2_ID],
-						state.data.output_signals,
+						inputs,
 						ui_settings=ui['settings'])
 
 

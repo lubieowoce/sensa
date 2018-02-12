@@ -4,13 +4,13 @@ from imgui import Vec2
 import typing
 from typing import (
 	Any, Tuple,
-	List, Dict, Union, Fun,
+	List, Dict, Union,
 )
 from types_util import (
 	PMap_, # PVector_,
 	Id, SignalId,
 	NDArray,
-	IMGui, Actions,
+	Fun, IMGui, Actions,
 )
 
 from imgui_widget import window
@@ -129,13 +129,13 @@ PlotBoxState = typing.NamedTuple(
 )
 
 
-def eval_node(plot_box_state: PlotBoxState) -> Maybe[ Fun[[List[Signal]], List[Signal]] ]:
+def eval_node(plot_box_state: PlotBoxState) -> Fun[ [List[Signal]], Maybe[List[Signal]] ] :
 	# a Sink might do some preprocessing here,
 	# like computing some stuff for a FFT plot
 	# (then the function signature would have to be more general)
-	return (Just(identity)
-			if plot_box_state.is_WithTimeRange()
-			else Nothing())
+	return (Just
+			if plot_box_state.plot_state.is_WithTimeRange()
+			else lambda _: Nothing())
 
 def to_node(plot_box_state: PlotBoxState) -> ng.Node:
 	return ng.Node(n_inputs=1, n_outputs=0)
@@ -312,8 +312,8 @@ def signal_plot_window(
 		signal_plot(plot_box_state, box_inputs, plot_draw_area, draw_list,
 					ui_settings=ui_settings)
 
-		plot_react_to_drag(plot_box_state, box_inputs, plot_draw_area,
-						   ui_settings=ui_settings)
+		# plot_react_to_drag(plot_box_state, box_inputs, plot_draw_area,
+		# 				   ui_settings=ui_settings)
 
 
 
@@ -326,6 +326,7 @@ def signal_plot(plot_box_state: PlotState,
 	# debug_log('plot_state', plot_state.get_variant_name()
 
 	m_signal = box_inputs[plot_box_state.id_][0]
+	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
 
 	if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
 		show_empty_plot(plot_box_state, "Not ready", plot_draw_area, draw_list)
@@ -482,6 +483,7 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 				   ui_settings) -> IMGui[None]:
 
 	# assert plot_state.is_Full()
+	assert type(signal) == Signal, signal
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
 

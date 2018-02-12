@@ -82,6 +82,12 @@ def add_rect(draw_list, rect: Rect, color) -> IMGui[None]:
 	add_rect_coords(draw_list, top_left, bottom_right, color)
 
 
+def assert_all(xs: Sequence[A], pred: Fun[[A], bool], msg: str = "{}"):
+	for x in xs:
+		assert pred(x), msg.format(x)
+		
+# def all_satisfy(xs: Sequence[A], pred: Fun[[A], bool]) -> bool:
+# 	return all()
 
 def one_is_true_of(x: A, preds: Sequence[Fun[[A], bool]]) -> bool:
 	return one_is_true([ pred(x) for pred in preds ])
@@ -144,6 +150,13 @@ class Nothing(Maybe):
 
 	def get_val(nothing): return None
 
+	def map(nothing, fn): return nothing
+
+	# >> (bind)
+	def __rshift__(nothing, fn): return nothing
+
+	def __repr__(just): return 'Nothing()'
+
 class Just(Maybe):
 	__slots__ = ('_val',)
 	def __init__(just, val): just._val = val
@@ -164,6 +177,12 @@ class Just(Maybe):
 
 	def get_val(just): return just._val
 
+	def map(just, fn): return Just(fn(just._val))
+
+	# >> (bind)
+	def __rshift__(just, fn): return fn(just._val)
+
+	def __repr__(just): return 'Just({})'.format(just._val)
 
 
 
