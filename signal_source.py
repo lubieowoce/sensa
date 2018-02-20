@@ -8,6 +8,7 @@ from types_util import (
 	Fun, IO_, IMGui, 
 )
 from sensa_util import impossible, Maybe, Nothing, Just
+import sensa_util as util
 
 from eff import (
 	Eff, effectful,
@@ -100,7 +101,7 @@ def signal_source_window(
 	emit = eff_operation('emit')
 
 
-	source_name = "Source (id={id})".format(id=source_state.id_)
+	source_name = "Source (id={id})###{id}".format(id=source_state.id_)
 
 	with window(name=source_name):
 
@@ -135,4 +136,4 @@ def signal_source_window(
 		else:
 			im.text("No signals available")
 
-
+		return util.get_window_rect()

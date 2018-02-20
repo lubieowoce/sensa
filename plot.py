@@ -13,7 +13,7 @@ from types_util import (
 	Fun, IMGui, Actions,
 )
 
-from imgui_widget import window
+from imgui_widget import window, child
 
 from debug_util import (
 	debug_log, debug_log_time, #debug_log_dict,
@@ -28,7 +28,8 @@ from sensa_util import (
 	Rect, is_in_rect, rect_width, rect_height,
 	add_rect,
 
-	get_mouse_position, get_window_content_rect,
+	get_mouse_position,
+	get_window_rect, get_window_content_rect,
 	range_incl,
 	impossible, bad_action, identity,
 	Maybe, Nothing, Just,
@@ -292,48 +293,59 @@ def signal_plot_window(
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
 
-	plot_name = "Plot (id={id})".format(id=plot_box_state.id_)
+	plot_name = "Plot (id={id})###{id}".format(id=plot_box_state.id_)
 
 	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
-		content_top_left, content_bottom_right = get_window_content_rect()
-		draw_list = im.get_window_draw_list()
 
+		plot_width = 0.
+		plot_height = im.get_content_region_available().y - 20
 
-
-		# checkbox
-		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
-		# if changed:
-		#     ui['plot_window_movable'] = window_movable
-
-		
-		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
-						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
-
-		signal_plot(plot_box_state, box_inputs, plot_draw_area, draw_list,
+		signal_plot(plot_box_state, box_inputs,
+					width=plot_width, height=plot_height,
 					ui_settings=ui_settings)
+
+
+		m_signal = box_inputs[plot_box_state.id_][0]
+		assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
+		if m_signal.is_Nothing():
+			im.text(" ")
+
+		elif m_signal.is_Just():
+			signal = m_signal.val
+			im.text_colored(str(signal), 0.8, 0.8, 0.8)
 
 		# plot_react_to_drag(plot_box_state, box_inputs, plot_draw_area,
 		# 				   ui_settings=ui_settings)
 
-
+		return get_window_rect()
 
 
 def signal_plot(plot_box_state: PlotState,
 				box_inputs: PMap_[Id, List[Maybe[Signal]]],
-				plot_draw_area: Rect,
-				draw_list, ui_settings) -> IMGui[None]:
+				width: float,
+				height: float,
+				ui_settings) -> IMGui[None]:
 
-	# debug_log('plot_state', plot_state.get_variant_name()
-
+	# TODO: try using IMGui::PlotLines?
+	
 	m_signal = box_inputs[plot_box_state.id_][0]
 	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
 
-	if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
-		show_empty_plot(plot_box_state, "Not ready", plot_draw_area, draw_list)
+	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
+	with child(name="signal_plot##"+str(plot_box_state.id_),  width=width, height=height, border=True,
+               styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
+		plot_draw_area = get_window_rect()
+		draw_list = im.get_window_draw_list()
 
-	elif m_signal.is_Just():
-		signal = m_signal.val
-		show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
+		if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
+			im.text("Not ready")
+
+		elif m_signal.is_Just():
+			signal = m_signal.val
+			show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
+
+	im.pop_style_color()
+
 
 
 
@@ -515,11 +527,6 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 	viewed_data_dur = end_t - start_t
 	debug_log('viewed_data_dur', viewed_data_dur)
 
-
-
-	# BOX AROUND PLOT
-	gray = (0.8, 0.8, 0.8, 1)
-	add_rect(draw_list, plot_draw_area, gray)
 
 
 

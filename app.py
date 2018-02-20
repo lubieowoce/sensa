@@ -32,11 +32,8 @@ from eff import (
 	get_signal_ids,
 )
 
-from imgui_widget import window
+from imgui_widget import window, child
 
-# from node import (
-# 	handle_output_node_effect, OutputNodeEffect,
-# )
 import node_graph
 
 from signal_source import (
@@ -70,6 +67,7 @@ from files import (
 
 import flags
 
+import sensa_util as util
 
 window_title = "Sensa"
 initital_window_size = (1280, 850)
@@ -324,51 +322,6 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 	return new_state if new_state != None else state
 
-	# # Demo
-
-	# if (type(action) == PlotAction
-	# 	and action.id_ == PLOT_1_ID
-	# 	and new_state != None
-	#    ):
-		
-
-	# 	if action.is_SelectSignal():
-	# 		emit(
-	# 			FilterBoxAction.Connect(
-	# 				id_=FILTER_BOX_ID,
-	# 				signal_id=action.signal_id 
-	# 			)
-	# 		)
-
-
-
-	# 	elif action.is_SetTimeRange():
-	# 		if state.plots[PLOT_2_ID].is_Full():
-	# 			emit( action.set(id_=PLOT_2_ID) )
-
-	# 	elif action.is_SetEmpty():
-
-	# 		emit(
-	# 			FilterBoxAction.Disconnect(id_=FILTER_BOX_ID)
-	# 		)
-
-	# 		emit( action.replace(id_=PLOT_2_ID ) )
-
-	# elif type(action) == FilterBoxAction and action.is_UnsetFilter():
-	# 	emit( PlotAction.SetEmpty(id_=PLOT_2_ID) )
-
-	# if (new_state != None
-	# 	and state.plots[PLOT_2_ID].is_Empty()
-	# 	and is_filter_box_full(state.filter_boxes[FILTER_BOX_ID])
-	# 	and state.data.output_ids[FILTER_BOX_ID] in state.data.output_signals
-	# 	and state.data.output_signals[state.data.output_ids[FILTER_BOX_ID]] != None
-	#    ):
-	# 		emit(
-	# 			PlotAction.SelectSignal(
-	# 				id_=PLOT_2_ID,
-	# 				signal_id=state.data.output_ids[FILTER_BOX_ID])
-	# 		)
-	# # End Demo
 
 
 
@@ -416,11 +369,33 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	global state
 
-
 	im.show_metrics_window()
 
 
 	# ------------------------
+	t_flags = 0
+	# t_flags = (
+	# 	  im.WINDOW_NO_TITLE_BAR
+	# 	| im.WINDOW_NO_MOVE
+	# 	| im.WINDOW_NO_RESIZE
+	# 	| im.WINDOW_NO_COLLAPSE
+	# 	| im.WINDOW_NO_FOCUS_ON_APPEARING
+	# 	| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
+	# )
+	with window(name="test", flags=t_flags):
+		im.button("bloop")
+
+	# 	pos = util.point_offset(im.get_window_position(), im.Vec2(40, 80))
+	# 	im.set_next_window_position(pos.x, pos.y)
+	# 	with window(name="a window"):
+	# 		im.text("I'm a window")
+
+	# 	top_left = im.get_item_rect_min()
+	# 	size = im.get_item_rect_size()
+	# 	bottom_right = util.point_offset(top_left, size)
+	# 	im.text('TL: '+str(top_left))
+	# 	im.text('BR: '+str(bottom_right))
+	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
 
 	with window(name="signals"):
 		if im.button("load example"):
@@ -465,33 +440,99 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# ----------------------------
-
-	inputs = node_graph.get_inputs(state.graph, state.data.box_outputs)
-
-	signal_source_window(state.source_boxes[SOURCE_BOX_ID],
-						 state.data.signals,
-						 state.data.signal_names)
-	
-	# signal plot 1
-	signal_plot_window(state.plots[PLOT_1_ID],
-						inputs,
-						ui_settings=ui['settings'])
-
-	# filter box 1
-	filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
-					  	ui_settings=ui_settings)
-
-	# filter box 2
-	filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
-					  	ui_settings=ui_settings)
-
-	# signal plot 2
-	signal_plot_window(state.plots[PLOT_2_ID],
-						inputs,
-						ui_settings=ui['settings'])
-
-
 	node_graph.graph_window(state.graph)
+
+
+	prev_color_window_background = im.get_style().color(im.COLOR_WINDOW_BACKGROUND)
+
+	im.push_style_color(im.COLOR_WINDOW_BACKGROUND, 0., 0., 0., 0.05)
+	im.set_next_window_position(0, 100)
+	with window(name="nodes", 
+				flags = (
+					  im.WINDOW_NO_TITLE_BAR
+					# | im.WINDOW_NO_MOVE
+					# | im.WINDOW_NO_RESIZE
+					| im.WINDOW_NO_COLLAPSE
+					| im.WINDOW_NO_FOCUS_ON_APPEARING
+					| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
+				)
+				):
+		positions = {}
+		inputs = node_graph.get_inputs(state.graph, state.data.box_outputs)
+
+		im.push_style_color(im.COLOR_WINDOW_BACKGROUND, *prev_color_window_background)
+
+		# source box
+		pos = signal_source_window(state.source_boxes[SOURCE_BOX_ID],
+							 state.data.signals,
+							 state.data.signal_names)
+		positions[SOURCE_BOX_ID] = pos
+
+
+		# signal plot 1
+		pos = signal_plot_window(state.plots[PLOT_1_ID],
+							inputs,
+							ui_settings=ui['settings'])
+		positions[PLOT_1_ID] = pos
+
+
+		# filter box 1
+		pos = filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
+						  	ui_settings=ui_settings)
+		positions[FILTER_BOX_1_ID] = pos
+
+
+		# filter box 2
+		pos = filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
+						  	ui_settings=ui_settings)
+		positions[FILTER_BOX_2_ID] = pos
+
+
+		# signal plot 2
+		pos = signal_plot_window(state.plots[PLOT_2_ID],
+							inputs,
+							ui_settings=ui['settings'])
+		positions[PLOT_2_ID] = pos
+
+		
+
+		# connections between boxes
+		prev_cursor_screen_pos = im.get_cursor_screen_position()
+
+
+		draw_list = im.get_window_draw_list()
+		SPACING = 20.
+		slot_positions = {}
+		IN = 0; OUT = 1;
+		for (id_, position) in positions.items():
+			node = state.graph.nodes[id_]
+
+			left_x = position.top_left.x
+			right_x = position.bottom_right.x
+			top_y = position.top_left.y
+
+			for ix in range(node.n_inputs):
+				pos = im.Vec2(left_x-20-3, top_y+30+ix*SPACING)
+				slot_positions[(IN, id_, ix)] = pos
+				im.set_cursor_screen_position(pos)
+				im.radio_button("##in{}{}".format(id_, ix), False)
+
+			for ix in range(node.n_outputs):
+				pos = im.Vec2(right_x+3, top_y+30+ix*SPACING)
+				slot_positions[(OUT, id_, ix)] = pos
+				im.set_cursor_screen_position(pos)
+				im.radio_button("##out{}{}".format(id_, ix), False)
+
+		for (src, dst) in state.graph.links:
+			src_pos = slot_positions[(OUT, src.node_id, src.ix)]
+			dst_pos = slot_positions[(IN,  dst.node_id, dst.ix)]
+			draw_list.add_line(src_pos, dst_pos, color=(0.,0.,0.,1.))
+
+		im.set_cursor_screen_position(prev_cursor_screen_pos)
+		im.pop_style_color()
+	im.pop_style_color()
+
+	im.show_style_editor()
 
 	# debug_log_dict('ui', ui)
 	# debug_log_dict("first plot", state.plots[PLOT_1_ID].as_dict())

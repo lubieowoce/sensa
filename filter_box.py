@@ -15,6 +15,8 @@ import imgui as im
 from uniontype import union
 
 from sensa_util import (chain, impossible, bad_action, Maybe, Nothing, Just)
+import sensa_util as util
+
 from eff import (
 	Eff, effectful,
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
@@ -160,7 +162,15 @@ def filter_box_window(
 	ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
 
 	emit = eff_operation('emit')
-	name = "Filter (id={id})".format(id=filter_box_state.id_)
+
+	name = None
+	if filter_box_state .filter_state .is_Filter():
+		filter_id     = filter_box_state .filter_state .filter_id
+		filter = available_filters[filter_id]
+		name = "{f_name} (id={id})###{id}".format(f_name=filter.name, id=filter_box_state.id_)
+	else:
+		name = "Filter###{id}".format(id=filter_box_state.id_)
+
 	with window(name=name):
 
 
@@ -185,6 +195,7 @@ def filter_box_window(
 			filter_params = filter_box_state .filter_state .params
 			filter = available_filters[filter_id]
 
+
 			for param_name in sorted(filter.func_sig):
 				changed, new_param_val = im.slider_float(param_name, filter_params[param_name],
 														 min_value=0.001, max_value=95.,
@@ -196,6 +207,8 @@ def filter_box_window(
 			
 		else:
 			im.text("No filter selected")
+
+		return util.get_window_rect()
 		
 
 
