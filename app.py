@@ -143,10 +143,10 @@ def sensa_app_init():
 
 	ui = {
 		'settings': {
-			'plot_window_movable': False,
+			'plot_window_movable': True,
 			'numpy_resample': True,
 			'filter_slider_power': 3.0,
-		}
+		},
 	}
 
 	
@@ -326,8 +326,9 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		plots = state['plots']
 		old_plot_state = plots[target_id]
 
-		signal_data = state.data.output_signals
-		new_plot_state = update_plot_box(old_plot_state, signal_data, action)
+		new_plot_state = update_plot_box(old_plot_state,  action)
+		# signal_data = state.data.box_outputs
+		# new_plot_state = update_plot_box(old_plot_state, signal_data, action)
 
 		if not (old_plot_state is new_plot_state): # reference comparison for speed
 			new_state = state.set('plots', plots.set(target_id, new_plot_state))
