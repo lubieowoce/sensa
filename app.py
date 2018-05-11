@@ -8,6 +8,10 @@ from typing import (
 	Any,
 	NamedTuple, Optional, Union,
 )
+
+import pickle
+
+
 from types_util import (
 	PMap_,
 	Action, Effect,
@@ -349,10 +353,15 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			# o_changed_box = target_id
 
 
-
 	elif type(action) == FileAction:
 		if action.is_Load():
-			emit_effect( FileEffect.Load(action.filename) ) 
+			emit_effect( FileEffect.Load(action.filename) )
+
+	elif type(action) == PersistenceAction:
+		emit_effect({SaveState(): PersistenceEffect.SaveState(),
+					 LoadState(): PersistenceEffect.LoadState()}[action])
+
+	else: util.impossible('unknown action of type {}:  {}'.format(type(action), action))
 
 
 	if o_changed_box != None:
@@ -372,6 +381,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 @effectful(SIGNAL_ID)
 def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
+	global current_id, current_signal_id  # used for state saving/loading
 
 	if type(command) == FileEffect:
 
@@ -394,8 +404,21 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		data = state['data']
 		return state.set('data', data.set('box_outputs', new_box_outputs))  
 
-	else:
-		return state
+	elif type(command) == PersistenceEffect:
+		if command.is_SaveState():
+			with open('sensa_state.pickle', mode='wb') as savefile:
+				pickle.dump((state, current_id, current_signal_id), file=savefile)
+			return state
+
+		elif command.is_LoadState():
+			with open('sensa_state.pickle', mode='rb') as savefile:
+				(new_state, current_id, current_signal_id) = pickle.load(file=savefile)
+			return new_state
+
+		else: util.impossible()
+
+	else: util.impossible('unknown command of type {}:  {}'.format(type(command), command))
+		
 
 
 # =======================================================
@@ -430,6 +453,24 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 	else: util.impossible()
 
 # ----------------------------------------------------------
+
+PersistenceAction, \
+	SaveState, \
+	LoadState, \
+= union(
+'PersistenceAction', [
+	('SaveState', []),
+	('LoadState', []),
+])
+
+PersistenceEffect, \
+	SaveState_, \
+	LoadState_, \
+= union(
+'PersistenceEffect', [
+	('SaveState', []),
+	('LoadState', []),
+])
 
 
 
@@ -508,6 +549,17 @@ def draw() -> Eff(ACTIONS)[None]:
 									   power=1.0)
 		if changed:
 			ui_settings['filter_slider_power'] = val
+
+		if im.button("save state"):
+			emit(PersistenceAction.SaveState())
+
+		im.same_line()
+
+		if im.button("load state"):
+			emit(PersistenceAction.LoadState())
+
+
+
 
 
 	# ----------------------------
