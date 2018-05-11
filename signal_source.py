@@ -1,15 +1,14 @@
 import typing
 from typing import (
-	Any,
-	Dict, Optional, Union,
+	Any, List, Dict, Optional, Union, 
 )
-
 from types_util import (
 	Id, SignalId,
 	PMap_,
-	IO_, IMGui, 
+	Fun, IO_, IMGui, 
 )
-from sensa_util import impossible
+from sensa_util import impossible, Maybe, Nothing, Just
+import sensa_util as util
 
 from eff import (
 	Eff, effectful,
@@ -18,9 +17,7 @@ from eff import (
 )
 from uniontype import union
 
-from node import (
-	SignalOutput, OutputNodeEffect
-)
+import node_graph as ng
 
 from eeg_signal import Signal
 
@@ -31,16 +28,29 @@ import imgui as im
 # Actualy a kind of Node - Source
 
 
+
+
 SourceState, \
 	Empty, \
 	Full, \
 = union(
 'SourceState', [
-	('Empty', [('id_', Id), ('output_id', SignalId)]),
-	('Full',  [('id_', Id), ('signal_id', SignalId), ('output_id', SignalId)])
+	('Empty', [('id_', Id)]),
+	('Full',  [('id_', Id), ('signal_id', SignalId)])
 	#                        ^ the source signal
 ]
 )
+
+def eval_node(src) -> Fun[ [Dict[SignalId, Signal]], Maybe[List[Signal]] ]:
+	return  lambda signals: Just([signals[src.signal_id]]) if src.is_Full() else Nothing()
+
+def to_node(src) -> ng.Node:
+	return ng.Node(n_inputs=0, n_outputs=1)
+
+SourceState.eval_node = eval_node
+SourceState.to_node   = to_node
+
+
 
 SourceAction, \
 	SetEmpty, \
@@ -52,41 +62,30 @@ SourceAction, \
 ]
 )
 
-SourceEffect, \
-	AddOutput, \
-	NoOutput, \
-= union(
-'SourceEffect', [
-	('AddOutput', [('id_', Id)]),
-	('NoOutput',  [('id_', Id)]),
-]
-)
 
-@effectful(ID, SIGNAL_ID, EFFECTS)
+@effectful(ID, ACTIONS)
 def initial_source_state():
 	get_id = eff_operation('get_id')
-	get_signal_id = eff_operation('get_signal_id')
-	emit_effect = eff_operation('emit_effect')
+	emit = eff_operation('emit')
 
 	id_ = get_id()
-	output_id = get_signal_id()
-	emit_effect( OutputNodeEffect.CreateBlankOutput(output_id=output_id) )
-	return SourceState.Empty(id_=id_, output_id=output_id)
+	state = SourceState.Empty(id_=id_)
+	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	return state
 
 
-@effectful(EFFECTS)
-def update_source(source_state: SourceState, action: SourceAction) -> Eff(EFFECTS)[SourceState]:
+
+
+@effectful(ACTIONS)
+def update_source(source_state: SourceState, action: SourceAction) -> Eff(ACTIONS)[SourceState]:
 	assert source_state.id_ == action.id_
-	emit_effect = eff_operation('emit_effect')
 	old_state = source_state
 
 	if action.is_SetEmpty():
-		emit_effect( NoOutput(id_=old_state.id_) )
-		return Empty(id_=old_state.id_, output_id=old_state.output_id)
+		return Empty(id_=old_state.id_)
 
 	elif action.is_SelectSignal():
-		emit_effect( AddOutput(id_=old_state.id_) )
-		return Full(id_=old_state.id_, signal_id=action.signal_id, output_id=old_state.output_id)
+		return Full(id_=old_state.id_, signal_id=action.signal_id)
 	else:
 		impossible("Unsupported action: "+action)
 		return old_state
@@ -102,7 +101,7 @@ def signal_source_window(
 	emit = eff_operation('emit')
 
 
-	source_name = "Source (id={id}, out={out})".format(id=source_state.id_, out=source_state.output_id)
+	source_name = "Source (id={id})###{id}".format(id=source_state.id_)
 
 	with window(name=source_name):
 
@@ -137,23 +136,4 @@ def signal_source_window(
 		else:
 			im.text("No signals available")
 
-
-def handle_source_effect(
-	state: SourceState,
-	signal_data: PMap_[SignalId, Signal],
-	command: SourceEffect) -> SignalOutput:
-
-	assert state.id_ == command.id_
-
-	if   command.is_NoOutput():
-		return SignalOutput.NotReady()
-
-	elif command.is_AddOutput():
-		assert state.is_Full()
-
-		signal_id = state.signal_id
-		signal = signal_data[signal_id]
-		return SignalOutput.Ready(signal=signal)
-
-	else:
-		impossible("Invalid command: "+command)
+		return util.get_window_rect()

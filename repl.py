@@ -1,4 +1,5 @@
-
+from functools import partial as part
+from sensa_util import chain as ch
 
 from importlib import reload as rl
 from pprint import pprint as pp
@@ -34,6 +35,62 @@ def init_state():
 			current_signal_id = eff_res[SIGNAL_ID]
 
 	return state
+
+
+
+from debug_util import varied_dict_to_str as dts
+s = lambda f, g: lambda x: g(f(x))
+pd = ch(dts, print)
+
+np = ch(part(map, str),  part(str.join, '\n'),  print)
+nps = ch(sorted, np)
+
+from typing import NamedTuple
+from collections import OrderedDict
+# from uniontype import union
+
+NodeId = NamedTuple('NodeId', [('id_', int)])
+
+InputSlotId  = NamedTuple('InputSlotId',  [('node_id', NodeId), ('ix', int)])
+OutputSlotId = NamedTuple('OutputSlotId', [('node_id', NodeId), ('ix', int)])
+
+node_names   = {
+	NodeId(0): 'x',
+	NodeId(1): 'y',
+	NodeId(2): 'z'
+}
+
+node_slot_ns = {
+	NodeId(0): (1, 2),
+	NodeId(1): (2, 0),
+	NodeId(2): (0, 1)
+}
+
+# links: Set[ Tuple[InputSlotId, OutputSlotId] ] 
+links = {
+	(OutputSlotId(NodeId(0), ix=0), InputSlotId(NodeId(1), ix=0)),
+	(OutputSlotId(NodeId(2), ix=0), InputSlotId(NodeId(0), ix=0)),
+	(OutputSlotId(NodeId(0), ix=1), InputSlotId(NodeId(1), ix=1))
+}
+
+graph_repr = \
+	["{s_val}@[{s_slot_ix}] -> {d_val}#[{d_slot_ix}]"\
+	  .format(s_val=node_names[s.node_id], d_val=node_names[d.node_id],
+		  	  s_slot_ix=s.ix, d_slot_ix=d.ix)
+	 for (s, d) in links]
+
+# graph = {name: {name+'['+_+']'}}
+
+def group_by(xs, key):
+	res = OrderedDict()
+	for x in xs:
+		kx = key(x)
+		if kx not in res.keys():
+			res[kx] = [ x ]
+		else:
+			res[kx].append(x)
+	return res
+
 
 # import read as r
 

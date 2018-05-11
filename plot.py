@@ -10,11 +10,10 @@ from types_util import (
 	PMap_, # PVector_,
 	Id, SignalId,
 	NDArray,
-	IMGui, Actions,
+	Fun, IMGui, Actions,
 )
 
-from imgui_widget import window
-from better_combo import str_combo_with_none
+from imgui_widget import window, child
 
 from debug_util import (
 	debug_log, debug_log_time, #debug_log_dict,
@@ -29,9 +28,11 @@ from sensa_util import (
 	Rect, is_in_rect, rect_width, rect_height,
 	add_rect,
 
-	get_mouse_position, get_window_content_rect,
+	get_mouse_position,
+	get_window_rect, get_window_content_rect,
 	range_incl,
-	impossible, bad_action,
+	impossible, bad_action, identity,
+	Maybe, Nothing, Just,
 )
 
 from eff import (
@@ -45,12 +46,8 @@ from time_range import (
 	scale_at_point_limited, time_range_subtract_offset, 
 )
 
-from node import (
-	# ConnectionState, Connected, Disconnected,
-	# ConnectionAction, Connect, Disconnect,
-	# update_node,
-	SignalOutput
-)
+
+import node_graph as ng
 
 
 from eeg_signal import Signal
@@ -71,7 +68,8 @@ from uniontype import union
 # 	  info
 
 
-# --------------
+
+
 
 DragState, \
 	NotDragging, \
@@ -105,6 +103,7 @@ PlotState, \
 ]
 )
 
+
 PlotAction, \
 	SetTimeRange, \
 	SetNoTimeRange,\
@@ -117,113 +116,77 @@ PlotAction, \
 ]
 )
 
-# ---------------
-SinkState, \
-	Disconnected, \
-	Connected, \
-= union(
-'SinkState', [
-	('Disconnected', [('id_', Id)]),
-	('Connected',    [('id_', Id), ('input_id', SignalId)])
-]
-)
-
-SinkAction, \
-	Disconnect, \
-	Connect, \
-= union(
-'SinkAction', [
-	('Disconnect',  [('id_', Id)]),
-	('Connect',     [('id_', Id), ('input_id', SignalId)]),
-]
-)
 
 
-def update_sink(state: SinkState, action: SinkAction):
-	if action.is_Disconnect():
-		return SinkState.Disconnected(id_=state.id_)
-	elif action.is_Connect():
-		return SinkState.Connected(id_=state.id_, input_id=action.input_id)
 
 
 # --------------
 PlotBoxState = typing.NamedTuple(
 'PlotBoxState', [
 	('id_', Id),
-	('connection_state', SinkState),
 	('plot_state',       PlotState),
 	('drag_state',		 DragState),
 ]
 )
 
 
+def eval_node(plot_box_state: PlotBoxState) -> Fun[ [List[Signal]], Maybe[List[Signal]] ] :
+	# a Sink might do some preprocessing here,
+	# like computing some stuff for a FFT plot
+	# (then the function signature would have to be more general)
+	return (Just
+			if plot_box_state.plot_state.is_WithTimeRange()
+			else lambda _: Nothing())
 
+def to_node(plot_box_state: PlotBoxState) -> ng.Node:
+	return ng.Node(n_inputs=1, n_outputs=0)
 
-
-
-
-PLOT_BOX_ACTION_TYPES = (SinkAction, PlotAction, DragAction)
-PlotBoxAction = Union[PLOT_BOX_ACTION_TYPES]
-
-@effectful(ID)
-def initial_plot_box_state() -> PlotBoxState:
-	get_id = eff_operation('get_id')
-
-	id_ = get_id()
-	return PlotBoxState(
-				id_=id_,
-				connection_state=Disconnected(id_),
-				plot_state=NoTimeRange(),
-				drag_state=NotDragging()
-			)
-
-
-
-
+PlotBoxState.eval_node = eval_node
+PlotBoxState.to_node   = to_node
 
 
 
 INITIAL_VIEW_SAMPLES_N = 800
+DEFAULT_TIME_RANGE = TimeRange(0.0, INITIAL_VIEW_SAMPLES_N/200.0)
+
+PLOT_BOX_ACTION_TYPES = (PlotAction, DragAction)
+PlotBoxAction = Union[PLOT_BOX_ACTION_TYPES]
+
+@effectful(ID, ACTIONS)
+def initial_plot_box_state() -> Eff(ID, ACTIONS)[PlotBoxState]:
+	get_id = eff_operation('get_id')
+	emit = eff_operation('emit')
+
+	id_ = get_id()
+	state = PlotBoxState(
+				id_=id_,
+				# plot_state=NoTimeRange(),
+				plot_state=WithTimeRange(DEFAULT_TIME_RANGE),
+				drag_state=NotDragging()
+			)
+	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	return state
+
+
+
+
+
+
+
 
 
 
 @effectful(ACTIONS)
-def update_plot_box(
-	plot_box_state: PlotBoxState,
-	signal_data: PMap_[SignalId, SignalOutput],
-	action: PlotBoxAction) -> PlotBoxState:
+def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> PlotBoxState:
 
 	assert plot_box_state.id_ == action.id_
-	emit = eff_operation('emit')
+	# emit = eff_operation('emit')
 
 	old_state = plot_box_state
 	new_state = None
 
-	if type(action) == SinkAction:
-		connection_state = old_state.connection_state
-		new_connection_state = update_sink(connection_state, action)
-		if not(connection_state is new_connection_state):
-			if new_connection_state.is_Connected():
-				# set a default timerange
-				new_signal_id = new_connection_state.input_id
-				m_new_signal = signal_data[new_signal_id]
-				if m_new_signal.is_Ready():
-					new_signal = m_new_signal.signal
-					max_t = (len(new_signal.data)-1) * new_signal.time_between_samples
-					default_end_t = limit_upper(  INITIAL_VIEW_SAMPLES_N * new_signal.time_between_samples  , high=max_t)
-					default_time_range = TimeRange(0.0, default_end_t)
-					emit( SetTimeRange(id_=old_state.id_, time_range=default_time_range) )
-				elif m_new_signal.is_NotReady():
-					pass
 
-			elif new_connection_state.is_Disconnected():
-				emit( SetNoTimeRange(id_=old_state.id_) )
-
-			new_state = old_state._replace(connection_state=new_connection_state)
-
-
-
-	elif type(action) == PlotAction:
+	if type(action) == PlotAction:
 		if action.is_SetTimeRange():
 			new_state = plot_box_state._replace(plot_state=WithTimeRange(time_range=action.time_range))
 		elif action.is_SetNoTimeRange():
@@ -282,6 +245,7 @@ def update_plot_box(
 
 white = (1.0, 1.0, 1.0, 1)
 
+# profiling markers
 SIGNAL_PLOT_CALL_START,  SIGNAL_PLOT_CALL_END = Range("signal_plot_call")
 WAVE_DRAW_START,         WAVE_DRAW_END        = Range("wave_draw")
 DATA_GET_START,          DATA_GET_END         = Range("data_get")
@@ -295,114 +259,90 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 
 @effectful(ACTIONS)
 def signal_plot_window(
-	plot_box_state:  Dict[str, Any],
-	signals:  PMap_[SignalId, SignalOutput],
+	plot_box_state:  PlotBoxState,
+	m_inputs: List[Maybe[Signal]],
 	ui_settings: Dict[str, Any]) -> Eff(ACTIONS)[IMGui[None]]:
 
-	emit = eff_operation('emit')
+	# emit = eff_operation('emit')
+	m_signal = m_inputs[0 ]
+	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
+
 
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
 
-	# if plot_state.is_Empty():
-	# 	plot_name = "No signal##{id}".format(id=plot_state.id_)
-	# elif plot_state.is_Full():
-	# 	plot_name = "Signal {sig_id} (drag to scroll)##{id}" \
-	# 		.format(sig_id=plot_state.signal_id, id=plot_state.id_)
-	# else:
-	# 	impossible("Invalid plot state: "+plot_state)
-	plot_name = "Plot (id={id})".format(id=plot_box_state.id_)
+
+	plot_name = "Plot (id={id})###{id}".format(id=plot_box_state.id_)
 
 	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
-		content_top_left, content_bottom_right = get_window_content_rect()
-		draw_list = im.get_window_draw_list()
 
-		# signal selector
-
-		if len(signals) > 0:
-			available_signal_names = {sig_id: str(sig_id) for sig_id in signals.keys()}
-			labels = sorted(available_signal_names.values()) 
-			prev_o_selected_signal_name = (None if plot_box_state.connection_state.is_Disconnected()
-										   else available_signal_names[plot_box_state.connection_state.input_id])
-
-			changed, o_selected_signal_name = str_combo_with_none("signal", prev_o_selected_signal_name, labels)
-			if changed:
-				if o_selected_signal_name != None:
-					# invert `available_signal_names` to find the signal id
-					# signal_name_to_id = {sig_name: sig_id for (sig_id, sig_name) in available_signal_names.items()}
-					# selected_signal_id = signal_name_to_id[o_selected_signal_name]
-					selected_signal_id = int(o_selected_signal_name)
-
-					emit( SinkAction.Connect(id_=plot_box_state.id_, input_id=selected_signal_id) )
-				else:
-					emit( SinkAction.Disconnect(id_=plot_box_state.id_) )
-		else:
-			im.text("No inputs available")
+		plot_width = 0. # auto
+		plot_height = im.get_content_region_available().y - 20
 
 
-
-		# checkbox
-		# changed, window_movable = im.checkbox("move", ui['plot_window_movable'])
-		# if changed:
-		#     ui['plot_window_movable'] = window_movable
-
-		
-		plot_draw_area = Rect(point_offset(content_top_left, im.Vec2(10, 35)),
-						      point_offset(content_bottom_right, im.Vec2(-10, -10)))
-
-		signal_plot(plot_box_state, signals, plot_draw_area, draw_list,
+		signal_plot(plot_box_state, m_signal,
+					width=plot_width, height=plot_height,
 					ui_settings=ui_settings)
 
-		plot_react_to_drag(plot_box_state, signals, plot_draw_area,
-						   ui_settings=ui_settings)
 
+		if m_signal.is_Nothing():
+			im.text(" ")
 
+		elif m_signal.is_Just():
+			signal = m_signal.val
+			im.text_colored(str(signal), 0.8, 0.8, 0.8)
+
+		return get_window_rect()
 
 
 def signal_plot(plot_box_state: PlotState,
-				signal_data: PMap_[SignalId, Signal],
-				plot_draw_area: Rect,
-				draw_list, ui_settings) -> IMGui[None]:
+				m_signal: Maybe[Signal],
+				width: float,
+				height: float,
+				ui_settings) -> IMGui[None]:
 
-	# debug_log('plot_state', plot_state.get_variant_name())
+	# TODO: try using IMGui::PlotLines?
+	
+	# m_signal = box_inputs[plot_box_state.id_][0]
+	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
 
+	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
+	with child(name="signal_plot##"+str(plot_box_state.id_),  width=width, height=height, border=True,
+               styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
+		plot_draw_area = get_window_rect()
+		draw_list = im.get_window_draw_list()
 
-	if plot_box_state.connection_state.is_Disconnected():
-		show_empty_plot(plot_box_state, "No input", plot_draw_area, draw_list)
+		if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
+			im.text("Not ready")
 
-
-	elif plot_box_state.connection_state.is_Connected():
-		signal_id = plot_box_state.connection_state.input_id
-		m_signal = signal_data[signal_id]
-
-		if m_signal.is_NotReady() or plot_box_state.plot_state.is_NoTimeRange():
-			show_empty_plot(plot_box_state, "Not ready", plot_draw_area, draw_list)
-
-		elif m_signal.is_Ready():
-			signal = m_signal.signal
+		elif m_signal.is_Just():
+			signal = m_signal.val
 			show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
 
-	else:
-		impossible("Invalid plot state: "+plot_box_state)
+			plot_react_to_drag(plot_box_state, signal, plot_draw_area,
+				   ui_settings=ui_settings)
+
+	im.pop_style_color()
+
+
 
 
 
 
 @effectful(ACTIONS)
 def plot_react_to_drag(plot_box_state: PlotState,
-					   signal_data: PMap_[str, Signal],
+					   signal: Signal,
 					   plot_draw_area: Rect,
 					   ui_settings) -> Eff(ACTIONS)[None]:
 	emit = eff_operation('emit')
 
-	if plot_box_state.connection_state.is_Disconnected() or plot_box_state.plot_state.is_NoTimeRange():
-		return
-	if plot_box_state.connection_state.is_Connected():
-		signal_id = plot_box_state.connection_state.input_id
-		m_signal = signal_data[signal_id]
-		if m_signal.is_NotReady():
-			return
-		else:
-			signal = m_signal.signal
+	# if plot_box_state.connection_state.is_Disconnected() or plot_box_state.plot_state.is_NoTimeRange():
+	# 	return
+	# if plot_box_state.connection_state.is_Connected():
+	# 	m_signal = box_inputs[plot_box_state.id_][0]
+	# 	if m_signal.is_Nothing():
+	# 		return
+	# 	else:
+	# 		signal = m_signal.signal
 
 
 	width_px  = int(rect_width(plot_draw_area))
@@ -433,15 +373,20 @@ def plot_react_to_drag(plot_box_state: PlotState,
 	# crude dragging state machine
 	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
 
+	debug_log('plot drag: clicked:', im.is_mouse_clicked(button=0))
+	debug_log('plot drag: down:', im.is_mouse_down(button=0))
+	debug_log('plot drag: both:', im.is_mouse_clicked(button=0) and im.is_mouse_dragging(button=0))
 	if (plot_box_state.drag_state.is_NotDragging() 
-		and im.is_mouse_dragging(button=0) 
+		and im.is_mouse_clicked(button=0)
 		and is_in_rect(drag_origin, plot_draw_area)
+		# and im.is_mouse_dragging(button=0)
 	   ):
 		# just begun dragging
 		emit( StartDrag(id_=plot_box_state.id_) )
 		
 	if (plot_box_state.drag_state.is_Dragging() 
-		and not im.is_mouse_dragging(button=0)
+		and im.is_mouse_up(button=0)
+		# and not im.is_mouse_dragging(button=0)
 	   ):
 		# just ended dragging
 		emit( EndDrag(id_=plot_box_state.id_) )
@@ -532,6 +477,7 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 				   ui_settings) -> IMGui[None]:
 
 	# assert plot_state.is_Full()
+	assert type(signal) == Signal, signal
 
 	debug_log_time(SIGNAL_PLOT_CALL_START)
 
@@ -563,11 +509,6 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 	viewed_data_dur = end_t - start_t
 	debug_log('viewed_data_dur', viewed_data_dur)
 
-
-
-	# BOX AROUND PLOT
-	gray = (0.8, 0.8, 0.8, 1)
-	add_rect(draw_list, plot_draw_area, gray)
 
 
 

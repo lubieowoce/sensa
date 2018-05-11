@@ -6,7 +6,7 @@ from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 
 from typing import (
 	Any,
-	# List,
+	NamedTuple, Optional, Union,
 )
 from types_util import (
 	PMap_,
@@ -21,6 +21,7 @@ from debug_util import (
 	debug_post_frame,
 )
 
+from uniontype import union
 
 # from id_eff import IdEff, id_and_effects, run_id_eff, get_ids
 from eff import (
@@ -32,23 +33,19 @@ from eff import (
 	get_signal_ids,
 )
 
-from imgui_widget import window
+from imgui_widget import window, child
 
-from node import (
-	handle_output_node_effect, OutputNodeEffect,
-)
+import node_graph as ng
 
 from signal_source import (
 	initial_source_state,
-	update_source,        SourceAction,
-	handle_source_effect, SourceEffect,
+	update_source, SourceAction,
 	signal_source_window,
 )
 
 from filter_box import (
 	initial_filter_box_state,
-	update_filter_box,        FILTER_BOX_ACTION_TYPES,
-	handle_filter_box_effect, FilterBoxEffect, 
+	update_filter_box, FILTER_BOX_ACTION_TYPES,
 	filter_box_window, 
 	# is_filter_box_full,
 )
@@ -71,6 +68,7 @@ from files import (
 
 import flags
 
+import sensa_util as util
 
 window_title = "Sensa"
 initital_window_size = (1280, 850)
@@ -105,10 +103,14 @@ def sensa_app_init():
 	current_signal_id = 0
 	
 	# create the initial state	
-	state, eff_res = run_eff(initial_state, id=current_id, signal_id=current_signal_id, effects=[])()
+	state, eff_res = run_eff(initial_state, id=current_id, actions=[])()
 	current_id        = eff_res[ID]
-	current_signal_id = eff_res[SIGNAL_ID]
-	for command in eff_res[EFFECTS]:
+	for action in eff_res[ACTIONS]:
+		state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
+
+		eff_res[ACTIONS].extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+
+		for command in eff_res[EFFECTS]:
 			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			current_signal_id = eff_res[SIGNAL_ID]
 
@@ -141,10 +143,10 @@ def sensa_app_init():
 
 	ui = {
 		'settings': {
-			'plot_window_movable': False,
+			'plot_window_movable': True,
 			'numpy_resample': True,
 			'filter_slider_power': 3.0,
-		}
+		},
 	}
 
 	
@@ -173,8 +175,8 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 
 
 	for act in frame_actions:
+		
 		# note: `frame_actions` might be modified if `update` emits an action
-
 		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
 
 		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
@@ -189,12 +191,6 @@ def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
 		debug_log('actions', list(frame_actions))
 
 	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
-
-	connections = {id_: box.connection_state
-					for box_type in ['filter_boxes', 'plots']
-						for (id_, box) in state[box_type].items() }
-	connections.update({id_: connection_state for (id_, connection_state) in state['source_boxes'].items()})
-	debug_log_dict('connections', connections)
 	# End Debug
 
 def sensa_post_frame():
@@ -218,23 +214,12 @@ def sensa_post_frame():
 
 AppState = PMap_[str, Any]
 
-@effectful(ID, SIGNAL_ID, EFFECTS)
-def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
-
+@effectful(ID, ACTIONS)
+def initial_state() -> Eff(ID, ACTIONS)[AppState]:
+	emit = eff_operation('emit')
 	# output_signal_names = pmap({sig_id: 'filter_{id}_output'.format(id=id) 
 	# 							for (id, sig_id) in output_ids.items()})
 
-	data = m(
-		signals = m(),       # type: PMap_[SignalId, Signal]
-		signal_names = m(),   # type: PMap_[SignalId, str]
-
-		# output_ids = m(), # type: PMap_[Id, SignalId]
-		# output_signal_names = output_signal_names, # type: PMap_[SignalId, str]
-		output_signals = m() # type: PMap_[SignalId, SignalOutput] 
-
-
-		# outputs = pmap({str(id): None for id in filter_boxes.keys()})
-	)
 
 
 	n_source_boxes = 1
@@ -247,10 +232,19 @@ def initial_state() -> Eff(ID, SIGNAL_ID)[AppState]:
 	plots = pmap({plot.id_: plot
 				  for plot in (initial_plot_box_state() for _ in range(n_plots))})
 
-
+	for group in (source_boxes, filter_boxes, plots):
+		for (id_, box) in group.items():
+			emit(ng.AddNode(id_, box.to_node()))
 
 	return m(
-		data = data,
+		graph = ng.empty_graph,
+
+		data = m(
+			signals = m(),      # type: PMap_[SignalId, Signal]
+			signal_names = m(), # type: PMap_[SignalId, str]
+			box_outputs = m()    # type: PMap_[Id, Maybe[Signal]] 
+	    ),
+	    link_selection = LinkSelection.empty,
 		source_boxes = source_boxes,
 		plots = plots,
 		filter_boxes = filter_boxes,
@@ -273,8 +267,35 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 	emit = eff_operation('emit'); emit_effect = eff_operation('emit_effect')
 
 	new_state = None
+	o_changed_box = None
 
-	if type(action) == SourceAction:
+	if type(action) == LinkSelectionAction:
+		old_link_selection = state.link_selection
+		link_selection = update_link_selection(old_link_selection, state.graph, action)
+		
+		if link_selection.src_slot != None and link_selection.dst_slot != None:
+			link = (link_selection.src_slot, link_selection.dst_slot)
+
+			can_create_link     = ng.is_input_slot_free(state.graph, link[1])
+			link_already_exists = link in state.graph.links
+			if link_already_exists:
+				emit( ng.Disconnect(*link) )
+			elif can_create_link:
+				emit( ng.Connect(*link) )
+			else: 
+				# link is invalid - e.g. connects to a filled slot
+				# but we empty it after anyway, so do nothing
+				pass
+			
+			link_selection = LinkSelection.empty
+
+		new_state = state.set('link_selection', link_selection)
+
+	elif type(action) == ng.GraphAction:
+		graph = state.graph
+		new_state = state.set('graph', ng.update_graph(graph, action))
+
+	elif type(action) == SourceAction:
 		debug_log('updating', 'source')
 		target_id = action.id_
 
@@ -283,7 +304,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		if not (old_source_box_state is new_source_box_state):
 			source_boxes = state['source_boxes']
 			new_state = state.set('source_boxes', source_boxes.set(target_id, new_source_box_state))
-
+			o_changed_box = target_id
 
 	elif type(action) in FILTER_BOX_ACTION_TYPES:
 		debug_log('updating', 'filter box')
@@ -294,6 +315,8 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		if not (old_filter_box_state is new_filter_box_state):
 			filter_boxes = state['filter_boxes']
 			new_state = state.set('filter_boxes', filter_boxes.set(target_id, new_filter_box_state))
+			o_changed_box = target_id
+
 
 	elif type(action) in PLOT_BOX_ACTION_TYPES:
 		# state_e['plots'][target_id] = update_plot(plot_state, state_e['data'], __plot_draw_area__, action)
@@ -303,12 +326,13 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		plots = state['plots']
 		old_plot_state = plots[target_id]
 
-		signal_data = state.data.output_signals
-		new_plot_state = update_plot_box(old_plot_state, signal_data, action)
+		new_plot_state = update_plot_box(old_plot_state,  action)
+		# signal_data = state.data.box_outputs
+		# new_plot_state = update_plot_box(old_plot_state, signal_data, action)
 
 		if not (old_plot_state is new_plot_state): # reference comparison for speed
-			new_state = state.set('plots', plots.set(target_id, new_plot_state)) 
-
+			new_state = state.set('plots', plots.set(target_id, new_plot_state))
+			# o_changed_box = target_id
 
 
 
@@ -317,54 +341,12 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			emit_effect( FileEffect.Load(action.filename) ) 
 
 
+	if o_changed_box != None:
+		# emit(ng.NodeChanged(id_=o_changed_box))
+		emit_effect(ng.EvalGraph())
 
 	return new_state if new_state != None else state
 
-	# # Demo
-
-	# if (type(action) == PlotAction
-	# 	and action.id_ == PLOT_1_ID
-	# 	and new_state != None
-	#    ):
-		
-
-	# 	if action.is_SelectSignal():
-	# 		emit(
-	# 			FilterBoxAction.Connect(
-	# 				id_=FILTER_BOX_ID,
-	# 				signal_id=action.signal_id 
-	# 			)
-	# 		)
-
-
-
-	# 	elif action.is_SetTimeRange():
-	# 		if state.plots[PLOT_2_ID].is_Full():
-	# 			emit( action.set(id_=PLOT_2_ID) )
-
-	# 	elif action.is_SetEmpty():
-
-	# 		emit(
-	# 			FilterBoxAction.Disconnect(id_=FILTER_BOX_ID)
-	# 		)
-
-	# 		emit( action.replace(id_=PLOT_2_ID ) )
-
-	# elif type(action) == FilterBoxAction and action.is_UnsetFilter():
-	# 	emit( PlotAction.SetEmpty(id_=PLOT_2_ID) )
-
-	# if (new_state != None
-	# 	and state.plots[PLOT_2_ID].is_Empty()
-	# 	and is_filter_box_full(state.filter_boxes[FILTER_BOX_ID])
-	# 	and state.data.output_ids[FILTER_BOX_ID] in state.data.output_signals
-	# 	and state.data.output_signals[state.data.output_ids[FILTER_BOX_ID]] != None
-	#    ):
-	# 		emit(
-	# 			PlotAction.SelectSignal(
-	# 				id_=PLOT_2_ID,
-	# 				signal_id=state.data.output_ids[FILTER_BOX_ID])
-	# 		)
-	# # End Demo
 
 
 
@@ -382,55 +364,58 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		new_signals, new_signal_names = handle_file_effect(state.data.signals, state.data.signal_names, command)
 
 		data = state['data']
-
 		return state.set('data', data \
 									.set('signals',      new_signals)
 									.set('signal_names', new_signal_names)
 						)
+	elif type(command) == ng.GraphEffect:
+		boxes = sum((state.source_boxes, state.filter_boxes, state.plots), m())
+		new_box_outputs = ng.handle_graph_effect(
+								graph=state.graph,
+								source_signals=state.data.signals,
+								boxes=boxes,
+								command=command
+						  )
 
-	elif  type(command) == SourceEffect:
-		source_box_id = command.id_
-		source_box_state = state.source_boxes[source_box_id]
-
-		output_signal_id = source_box_state.output_id
-		output_signal = handle_source_effect(source_box_state, state.data.signals, command)
-		
-		data    = state['data']
-		output_signals = data['output_signals']
-		return \
-			state\
-			.set('data', data.set('output_signals', output_signals.set(output_signal_id, output_signal) ))
-
-	elif type(command) == OutputNodeEffect:
-		new_output_signals = handle_output_node_effect(state.data.output_signals, command)
-		
-		data    = state['data']
-		return \
-			state\
-			.set('data', data.set('output_signals', new_output_signals))
-
-	elif type(command) == FilterBoxEffect: # Trans
-		filter_box_id = command.id_
-		filter_box_state = state.filter_boxes[filter_box_id]
-		output_signal_id  = filter_box_state.connection_state.output_id
-
-
-		output_signals = state.data.output_signals
-		m_output_signal = handle_filter_box_effect(filter_box_state, output_signals , command)
-
-
-		data    = state['data']
-		output_signals = data['output_signals']
-		return \
-			state\
-			.set('data', data.set('output_signals', output_signals.set(output_signal_id, m_output_signal) ))
-
+		data = state['data']
+		return state.set('data', data.set('box_outputs', new_box_outputs))  
 
 	else:
 		return state
 
 
 # =======================================================
+
+LinkSelection = NamedTuple('LinkSelection', [
+							('src_slot', Optional[ng.OutputSlotId]),
+							('dst_slot', Optional[ng.InputSlotId]) ])
+LinkSelection.empty = LinkSelection(src_slot=None, dst_slot=None)
+
+LinkSelectionAction, \
+	ClickOutput, \
+	ClickInput, \
+	Clear, \
+= union( 
+'LinkSelectionAction', [
+	('ClickOutput',  [('slot', ng.OutputSlotId)]),
+	('ClickInput',   [('slot', ng.InputSlotId)]),
+	('Clear', [])
+ ])
+
+
+def update_link_selection(state: LinkSelection, graph, action: LinkSelectionAction) -> LinkSelection:
+	if action.is_ClickOutput():
+		return (LinkSelection.empty  if state.src_slot != None else
+				state._replace(src_slot=action.slot) )
+
+	if action.is_ClickInput():
+		return (LinkSelection.empty  if state.dst_slot != None else
+				state._replace(dst_slot=action.slot) )
+
+	elif action.is_Clear(): return LinkSelection.empty
+	else: util.impossible()
+
+# ----------------------------------------------------------
 
 
 
@@ -440,11 +425,33 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	global state
 
-
 	im.show_metrics_window()
 
 
 	# ------------------------
+	t_flags = 0
+	# t_flags = (
+	# 	  im.WINDOW_NO_TITLE_BAR
+	# 	| im.WINDOW_NO_MOVE
+	# 	| im.WINDOW_NO_RESIZE
+	# 	| im.WINDOW_NO_COLLAPSE
+	# 	| im.WINDOW_NO_FOCUS_ON_APPEARING
+	# 	| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
+	# )
+	with window(name="test", flags=t_flags):
+		im.button("bloop")
+
+	# 	pos = util.point_offset(im.get_window_position(), im.Vec2(40, 80))
+	# 	im.set_next_window_position(pos.x, pos.y)
+	# 	with window(name="a window"):
+	# 		im.text("I'm a window")
+
+	# 	top_left = im.get_item_rect_min()
+	# 	size = im.get_item_rect_size()
+	# 	bottom_right = util.point_offset(top_left, size)
+	# 	im.text('TL: '+str(top_left))
+	# 	im.text('BR: '+str(bottom_right))
+	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
 
 	with window(name="signals"):
 		if im.button("load example"):
@@ -489,40 +496,133 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# ----------------------------
+	# ng.graph_window(state.graph)
 
 
-	# state.data:
-		# signals = m(),       # type: PMap_[SignalId, Signal]
-		# signal_names = m(),   # type: PMap_[SignalId, str]
+	prev_color_window_background = im.get_style().color(im.COLOR_WINDOW_BACKGROUND)
 
-		# output_ids = output_ids, # type: PMap_[Id, SignalId]
-		# output_signal_names = output_signal_names,
-		# output_signals = m() # type: PMap_[SignalId, Signal] 
-
-	signal_source_window(state.source_boxes[SOURCE_BOX_ID],
-						 state.data.signals, state.data.signal_names)
-	
-	# signal plot 1
-	signal_plot_window(state.plots[PLOT_1_ID],
-						state.data.output_signals,
-						ui_settings=ui['settings'])
-
-	# filter box 1
-	filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
-						state.data.output_signals,
-					  	ui_settings=ui_settings)
-
-	# filter box 2
-	filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
-						state.data.output_signals,
-					  	ui_settings=ui_settings)
-
-	# signal plot 2
-	signal_plot_window(state.plots[PLOT_2_ID],
-						state.data.output_signals,
-						ui_settings=ui['settings'])
+	im.push_style_color(im.COLOR_WINDOW_BACKGROUND, 0., 0., 0., 0.05)
+	im.set_next_window_position(0, 100)
+	with window(name="nodes", 
+				flags = (
+					  im.WINDOW_NO_TITLE_BAR
+					# | im.WINDOW_NO_MOVE
+					# | im.WINDOW_NO_RESIZE
+					| im.WINDOW_NO_COLLAPSE
+					| im.WINDOW_NO_FOCUS_ON_APPEARING
+					| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
+				)
+				):
+		box_positions = {}
+		inputs = ng.get_inputs(state.graph, state.data.box_outputs)
 
 
+		im.push_style_color(im.COLOR_WINDOW_BACKGROUND, *prev_color_window_background)
+
+		# source box
+		pos = signal_source_window(state.source_boxes[SOURCE_BOX_ID],
+							 state.data.signals,
+							 state.data.signal_names)
+		box_positions[SOURCE_BOX_ID] = pos
+
+
+		# signal plot 1
+		pos = signal_plot_window(state.plots[PLOT_1_ID],
+							inputs[PLOT_1_ID],
+							ui_settings=ui['settings'])
+		box_positions[PLOT_1_ID] = pos
+
+
+		# filter box 1
+		pos = filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
+						  	ui_settings=ui_settings)
+		box_positions[FILTER_BOX_1_ID] = pos
+
+
+		# filter box 2
+		pos = filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
+						  	ui_settings=ui_settings)
+		box_positions[FILTER_BOX_2_ID] = pos
+
+
+		# signal plot 2
+		pos = signal_plot_window(state.plots[PLOT_2_ID],
+							inputs[PLOT_2_ID],
+							ui_settings=ui['settings'])
+		box_positions[PLOT_2_ID] = pos
+
+		
+		im.pop_style_color()
+
+
+
+		# connections between boxes
+		link_selection = state.link_selection
+
+		prev_cursor_screen_pos = im.get_cursor_screen_position()
+
+		# get slot coords and draw slots
+		im.push_style_color(im.COLOR_CHECK_MARK, *(0, 0, 0, 100/255))
+
+		draw_list = im.get_window_draw_list()
+		SPACING = 20.
+		slot_center_positions = {}
+
+		for (id_, position) in box_positions.items():
+			node = state.graph.nodes[id_]
+
+			left_x = position.top_left.x
+			right_x = position.bottom_right.x
+			top_y = position.top_left.y
+
+			for slot_ix in range(node.n_inputs):
+				pos = im.Vec2(left_x-20-3, top_y+30+slot_ix*SPACING)
+				im.set_cursor_screen_position(pos)
+
+				slot = ng.InputSlotId(id_, slot_ix)
+				was_selected = (slot == link_selection.dst_slot)
+
+				changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
+				if changed:
+					emit(ClickInput(slot))
+
+				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+				slot_center_positions[('in', id_, slot_ix)] = center_pos
+
+			for slot_ix in range(node.n_outputs):
+				pos = im.Vec2(right_x+3, top_y+30+slot_ix*SPACING)
+				im.set_cursor_screen_position(pos)
+
+				slot = ng.OutputSlotId(id_, slot_ix)
+				was_selected = (slot == link_selection.src_slot)
+
+				changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
+				if changed:
+					emit(ClickOutput(slot))
+
+				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+				slot_center_positions[('out', id_, slot_ix)] = center_pos
+
+		im.pop_style_color()
+		
+
+
+
+
+		# draw links
+		for (src, dst) in state.graph.links:
+			src_pos = slot_center_positions[('out', src.node_id, src.ix)]
+			dst_pos = slot_center_positions[('in',  dst.node_id, dst.ix)]
+			draw_list.add_line(src_pos, dst_pos, color=(0.5, 0.5, 0.5, 1.), thickness=2.)
+
+
+		im.set_cursor_screen_position(prev_cursor_screen_pos)
+	# end nodes window
+
+	im.pop_style_color()
+
+
+	im.show_style_editor()
 
 	# debug_log_dict('ui', ui)
 	# debug_log_dict("first plot", state.plots[PLOT_1_ID].as_dict())

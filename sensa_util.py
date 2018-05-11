@@ -16,12 +16,12 @@ import builtins
 # from functools import partial
 from itertools import islice
 from collections import namedtuple
+from pyrsistent import pmap
 
 import imgui as im
 from imgui import Vec2
 
 import flags
-
 
 def impossible(msg):
 	raise Exception("Internal error: " + msg)
@@ -37,11 +37,16 @@ def rect_height(rect: Rect) -> float:
 	top_left, bottom_right = rect
 	return bottom_right.y - top_left.y
 
+def rect_center(rect: Rect) -> Vec2:
+	top_left, bottom_right = rect
+	return Vec2(top_left.x + (bottom_right.x - top_left.x)/2,
+				top_left.y + (bottom_right.y - top_left.y)/2 )
+
 def get_mouse_position() -> IO_[Vec2]:
 	io = im.get_io()
 	return io.mouse_pos
 
-def get_window_rect() -> IO_[Rect]:
+def get_window_rect() -> IMGui[Rect]:
 	""" To be used only in imgui code """
 	window_top_left = im.get_window_position()
 	width, height = im.get_window_size()
@@ -50,7 +55,7 @@ def get_window_rect() -> IO_[Rect]:
 	return Rect(window_top_left, window_bottom_right)
 
 
-def get_window_content_rect() -> IO_[Rect]:
+def get_window_content_rect() -> IMGui[Rect]:
 	TITLE_BAR_HEIGHT = 20
 	window_top_left = im.get_window_position()
 	content_top_left = Vec2(window_top_left.x,  window_top_left.y + TITLE_BAR_HEIGHT)
@@ -58,7 +63,10 @@ def get_window_content_rect() -> IO_[Rect]:
 	window_bottom_right = Vec2(window_top_left.x + width,
 								  window_top_left.y + height)
 	return Rect(content_top_left, window_bottom_right)
-	
+
+def get_item_rect() -> IMGui[Rect]:
+	return Rect(im.get_item_rect_min(), im.get_item_rect_max())
+
 
 def is_in_rect(point: Vec2, rect: Rect) -> bool:
 	top_left, bottom_right = rect
@@ -82,6 +90,12 @@ def add_rect(draw_list, rect: Rect, color) -> IMGui[None]:
 	add_rect_coords(draw_list, top_left, bottom_right, color)
 
 
+def assert_all(xs: Sequence[A], pred: Fun[[A], bool], msg: str = "{}"):
+	for x in xs:
+		assert pred(x), msg.format(x)
+		
+# def all_satisfy(xs: Sequence[A], pred: Fun[[A], bool]) -> bool:
+# 	return all()
 
 def one_is_true_of(x: A, preds: Sequence[Fun[[A], bool]]) -> bool:
 	return one_is_true([ pred(x) for pred in preds ])
@@ -123,26 +137,60 @@ def either(e: Either[A, B], l_fn: Fun[[A], R], r_fn: Fun[[A], R]) -> R:
 
 
 class Maybe(Generic[A]):
-	pass
+	__slots__ = ()
 
 class Nothing(Maybe):
+	__slots__ = ()
 	def __init__(nothing): pass
+
 	@property
 	def is_nothing(nothing): return True
+
+	def is_Nothing(nothing): return True
+
 	@property
 	def is_just(nothing):   return False
+
+	def is_Just(nothing):   return False
+
 	@property
 	def val(nothing): raise Exception("Tried to get value of Nothing")
+
 	def get_val(nothing): return None
 
+	def map(nothing, fn): return nothing
+
+	# >> (bind)
+	def __rshift__(nothing, fn): return nothing
+
+	def __repr__(just): return 'Nothing()'
+
 class Just(Maybe):
-	def __init__(just, val): just.val = val
+	__slots__ = ('_val',)
+	def __init__(just, val): just._val = val
+
 	@property
+
 	def is_nothing(just): return False
+
+	def is_Nothing(just): return False
+
 	@property
 	def is_just(just):    return True
-	def get_val(just): return just.val
 
+	def is_Just(just):    return True
+
+	@property
+	def val(just): return just._val
+
+	def get_val(just): return just._val
+
+	def map(just, fn): return Just(fn(just._val))
+
+	# >> (bind)
+	def __rshift__(just, fn): return fn(just._val)
+
+	def __repr__(just): return 'Just({})'.format(just._val)
 
 
 
@@ -151,11 +199,29 @@ def dict_to_function(dictionary: Dict[K, A]) -> Fun[[K], A]:
 
 
 
+def is_sequence_unique(seq: Sequence[A]) -> bool:
+	seen = set()
+	for x in seq:
+		if x in seen:
+			return False
+		seen.add(x)
+	# ran through list without seeing same value twice	
+	return True
+	
+
+def invert(d: PMap_[A, B]) -> PMap_[B, A]:
+	assert is_sequence_unique(d.values()), d+" has duplicate values, so it's not invertible"
+
+	return pmap({val: key for (key, val) in d.items()})
+
+
+
 def is_sequence_uniform(seq: Sequence[Any]) -> bool:
 	if len(seq) == 0:
 		return True
 	else: # list has values
 		return sequence_type(sequence).is_right
+
 
 
 
