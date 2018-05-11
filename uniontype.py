@@ -2,6 +2,7 @@
 from collections import namedtuple
 from typing import Any, Tuple, List, Callable, Union
 import typing
+import sys
 # from functools import partial
 
 Fun = Callable
@@ -11,15 +12,35 @@ Fun = Callable
 
 def untyped_union(
 		type_name: str, variant_specs: List[ Tuple[str, List[str]] ],
-		allow_zero_constructors=False ) -> List[Any]:
+		allow_zero_constructors=False,
+		_module_name=None) -> List[Any]:
+	"""
+	Wraps `union`, giving every field type `Any`.
+	See the documentation for `union` for more.
+	"""
 
 	variant_specs = [    (variant_name, [(attr_name, Any) for attr_name in attr_names])
 					 for (variant_name, attr_names)
 					 in variant_specs]
 
+	# module name
+
+	# `union` relies on sys._getframe to inspect the caller's frame and
+	# get the right module name. That won't work if untyped_union calls it,
+	# since the caller's frame will be located in this module.
+	# So we have to get the module name here, and pass it down.				 
+	# See the "module name" section in `union`'s definition for more.
+	if _module_name is None:
+		try:
+			_module_name = sys._getframe(1).f_globals.get('__name__', '__main__')
+		except (AttributeError, ValueError):
+			_module_name = __name__ # fallback - this module
+
+
 	return union(type_name, variant_specs,
 				 typecheck=False,
-				 allow_zero_constructors=allow_zero_constructors)
+				 allow_zero_constructors=allow_zero_constructors,
+				 _module_name=_module_name)
 
 
 
@@ -27,7 +48,9 @@ def untyped_union(
 def union(
 		type_name: str, variant_specs: List[  Tuple[str, List[Tuple[str, type]] ]  ],
 		typecheck=True,
-		allow_zero_constructors=False ) -> List[Any]:
+		allow_zero_constructors=False,
+		_module_name=None
+		) -> List[Any]:
 	"""
 	Analogous to the namedtuple function.
 
@@ -35,9 +58,9 @@ def union(
 	Creating a type:
 
 	Example: Foo{ r } | Bar{ x, y } | BazBaz {}
-    - Foo has one attribute r,
-    - Bar has two attributes x, y
-    - BazBaz has no attributes
+	- Foo has one attribute r,
+	- Bar has two attributes x, y
+	- BazBaz has no attributes
 
 	>>> Example, \
 		Foo, \
@@ -71,8 +94,18 @@ def union(
 	>>>     print('a is a Bar')
 	>>> elif a.is_BazBaz():
 	>>> 	print('a is a BazBaz')
+	
+
+	Classes returned by `union` are picklable if the attributes are picklable.
 
 
+	`_module_name`: Used internally. (untyped_union calls union)
+		The user normally doesn't have to pass anything here -
+		`union` will figure out the right module name through introspection.
+		(see the "module name" section in this function's source to see how it does that)
+		If it doesn't for some reason, feel free to pass it the correct module name. 
+		The resulting class will have its __module__ set to the value of _module_name.
+		Necessary for nice type names and for pickling to work.
 
 	"""
 	if not allow_zero_constructors and len(variant_specs) == 0:
@@ -108,6 +141,29 @@ def union(
 	# 	pass
 	
 
+
+	# module name
+
+	# Copied with modifications from collections.namedtuple, which has the same issue.
+
+	# For pickling to work, the __module__ variable needs to be set to the __name__
+	# of the module  where the union is created.
+	# Bypass this step in environments where  sys._getframe is not defined  (Jython for example)
+	# or sys._getframe is not  defined for arguments greater than 0 (IronPython).
+
+	# note: `untyped_union` passes the correct module name to `union`.
+	if _module_name is None:
+		# caller of `union` didn't pass a module name - get the caller's module name
+		try:
+			_module_name = sys._getframe(1).f_globals.get('__name__', '__main__')
+		except (AttributeError, ValueError):
+			_module_name = __name__ # fallback - this module
+
+	UserUnionType.__module__ = _module_name
+
+
+
+
 	# string representation
 	def __str__(x: UserUnionType) -> str:
 		if x.id__ not in variant_ids:
@@ -141,19 +197,24 @@ def union(
 
 
 
-
 	# backing tuples
 
 	def make_backing_tuple(variant_name: str, attr_names_and_types: List[Tuple[str, type]]):
 		# Each variant gets a VariantNameVal namedtuple to store the values
 		# it also stores the specified types in VariantNameVal._field_types
-		BackingTuple = typing.NamedTuple(variant_name+"Val", attr_names_and_types)
+		name = '_'+variant_name+'Val'
+		BackingTuple = typing.NamedTuple(name, attr_names_and_types)
+		BackingTuple.__module__ = _module_name
+		BackingTuple.__qualname__ = type_name + '.' + name
 		return BackingTuple
 
 	variant_backing_tuples = \
 		[make_backing_tuple(variant_name, attr_names_and_types)
-	     for (variant_name, attr_names_and_types) 
-	     in variant_specs ]
+		 for (variant_name, attr_names_and_types) 
+		 in variant_specs ]
+
+	for BackingTuple in variant_backing_tuples:
+		setattr(UserUnionType, BackingTuple.__name__, BackingTuple)
 
 
 
@@ -191,9 +252,9 @@ def union(
 					specified_attr_type = specified_attr_types[attr_name]
 					if type(attr_val) != specified_attr_type:
 						raise TypeError(type_name+".{variant_name} constructor: attribute {attr_name} has specified type {specified_attr_type}, but is {arg}: {arg_type}" \
-							             .format(variant_name=variant_name, attr_name=repr(attr_name),
-							             		 specified_attr_type=specified_attr_type,
-							             	     arg=repr(attr_val), arg_type=type(attr_val)))
+										 .format(variant_name=variant_name, attr_name=repr(attr_name),
+												 specified_attr_type=specified_attr_type,
+												 arg=repr(attr_val), arg_type=type(attr_val)))
 
 			# constructor
 			return UserUnionType(id__=variant_id, val__=val__)
@@ -265,9 +326,9 @@ def union(
 
 	for attr_name in all_attr_names:
 		setattr(UserUnionType, attr_name,
-			    property(make_variant_attr_name_property(attr_name)))
+				property(make_variant_attr_name_property(attr_name)))
 		setattr(UserUnionType, 'get_' + attr_name,
-			    make_variant_attr_name_property(attr_name))
+				make_variant_attr_name_property(attr_name))
 
 
 
@@ -301,19 +362,23 @@ def union(
 				specified_attr_type = specified_attr_types[attr_name]
 				if type(attr_val) != specified_attr_type:
 					raise TypeError(type_name+'.'+obj.get_variant_name()+".replace: Cannot set attribute {attr_name} with specified type {specified_attr_type} to {arg}: {arg_type}" \
-						             .format(variant_name=obj.get_variant_name(), attr_name=repr(attr_name),
-						             		 specified_attr_type=specified_attr_type,
-						             	     arg=repr(attr_val), arg_type=type(attr_val)))
+									 .format(variant_name=obj.get_variant_name(), attr_name=repr(attr_name),
+											 specified_attr_type=specified_attr_type,
+											 arg=repr(attr_val), arg_type=type(attr_val)))
 
 		# replacing
 		return obj._replace(val__=new_val__)
 
 	UserUnionType.replace = replace
 	UserUnionType.set     = replace # alias
+	UserUnionType.update  = replace # alias
 
 
-	# UserUnionType.__iter__ = lambda obj: obj.val__.__iter__() # can't do this - it breaks namedtuple's _asdict(), _replace(), _make(), and others
+	# # UserUnionType.__iter__ = lambda obj: obj.val__.__iter__() # can't do this - it breaks namedtuple's _asdict(), _replace(), _make(), and others
 	# use as_tuple and iter over that instead.
+
+
+
 
 	return [UserUnionType] + variant_constructors
 
@@ -326,7 +391,7 @@ def match(x, **variant_name_to_lamb):
 	for pat_name in variant_name_to_lamb.keys():
 		if pat_name != '_':
 			assert pat_name in cls.variant_names, "Pattern {var} is not a variant of class {cls}" \
-											   	  .format(var=repr(pat_name), cls=cls)
+												  .format(var=repr(pat_name), cls=cls)
 	# first, try matching by variant name
 	var_name = x.get_variant_name()
 	o_var_expr = variant_name_to_lamb.get(var_name, None)
@@ -390,7 +455,7 @@ Example, \
 
 def _modified_constructor_err_text(type_name: str, variant_name: str, err_text: str) -> str:
 	# could probably be done way easier with regex
- 	# '__new__() takes 2 positional arguments but 3 were given'
+	# '__new__() takes 2 positional arguments but 3 were given'
 	if err_text.count('__new__() takes ') == 1 \
 		and err_text.count(' positional arguments but ') == 1 \
 		and err_text.count(' were given') == 1:
@@ -417,5 +482,5 @@ def _modified_positional_args_err_text(type_name, variant_name, err_text: str) -
 
 	modified_err_text = type_name + '.' + variant_name \
 						+ ' takes {} positional arguments but {} were given' \
-						    .format(*correct_arg_numbers)
+							.format(*correct_arg_numbers)
 	return modified_err_text
