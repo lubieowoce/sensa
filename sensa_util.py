@@ -37,11 +37,16 @@ def rect_height(rect: Rect) -> float:
 	top_left, bottom_right = rect
 	return bottom_right.y - top_left.y
 
+def rect_center(rect: Rect) -> Vec2:
+	top_left, bottom_right = rect
+	return Vec2(top_left.x + (bottom_right.x - top_left.x)/2,
+				top_left.y + (bottom_right.y - top_left.y)/2 )
+
 def get_mouse_position() -> IO_[Vec2]:
 	io = im.get_io()
 	return io.mouse_pos
 
-def get_window_rect() -> IO_[Rect]:
+def get_window_rect() -> IMGui[Rect]:
 	""" To be used only in imgui code """
 	window_top_left = im.get_window_position()
 	width, height = im.get_window_size()
@@ -50,7 +55,7 @@ def get_window_rect() -> IO_[Rect]:
 	return Rect(window_top_left, window_bottom_right)
 
 
-def get_window_content_rect() -> IO_[Rect]:
+def get_window_content_rect() -> IMGui[Rect]:
 	TITLE_BAR_HEIGHT = 20
 	window_top_left = im.get_window_position()
 	content_top_left = Vec2(window_top_left.x,  window_top_left.y + TITLE_BAR_HEIGHT)
@@ -58,7 +63,10 @@ def get_window_content_rect() -> IO_[Rect]:
 	window_bottom_right = Vec2(window_top_left.x + width,
 								  window_top_left.y + height)
 	return Rect(content_top_left, window_bottom_right)
-	
+
+def get_item_rect() -> IMGui[Rect]:
+	return Rect(im.get_item_rect_min(), im.get_item_rect_max())
+
 
 def is_in_rect(point: Vec2, rect: Rect) -> bool:
 	top_left, bottom_right = rect
