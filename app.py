@@ -17,13 +17,12 @@ from types_util import (
 from debug_util import (
 	debug_initialize,
 	debug_window,
-	debug_log, debug_log_dict,
+	debug_log, debug_log_dict, debug_log_crash,
 	debug_post_frame,
 )
 
 from uniontype import union
 
-# from id_eff import IdEff, id_and_effects, run_id_eff, get_ids
 from eff import (
 	Eff, run_eff,
 	effectful,
@@ -164,36 +163,7 @@ def draw_and_log_actions() -> IO_[None]:
 
 
 
-
-
-
-def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
-	global state
-	global frame_actions
-	global current_signal_id
-
-
-
-	for act in frame_actions:
-		
-		# note: `frame_actions` might be modified if `update` emits an action
-		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
-
-		frame_actions.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
-
-		debug_log('effects', eff_res[EFFECTS])
-		for command in eff_res[EFFECTS]:
-			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
-			current_signal_id = eff_res[SIGNAL_ID]
-
-	# Debug
-	if len(frame_actions) > 0:
-		debug_log('actions', list(frame_actions))
-
-	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
-	# End Debug
-
-def sensa_post_frame():
+def sensa_post_frame() -> IO_[None]:
 	global state
 	global frame_actions
 
@@ -203,6 +173,50 @@ def sensa_post_frame():
 	if flags.DEBUG:
 		debug_post_frame()
 		debug_window()
+
+
+
+
+def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
+	global state
+	global frame_actions
+	global current_signal_id
+
+	actions_to_process = frame_actions[:]
+
+	for action in actions_to_process:
+		try:
+			# note: `frame_actions` might be modified if `update` emits actions
+			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
+
+		except Exception as ex:
+			debug_log_crash(origin='update', cause=action, exception=ex)
+			actions_to_process.clear()
+			break
+
+		else:
+			actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+
+			debug_log('effects', eff_res[EFFECTS])
+			for command in eff_res[EFFECTS]:
+				try:
+					state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+				except Exception as ex:
+					debug_log_crash(origin='handle', cause=command, exception=ex)
+					break
+				else:
+					current_signal_id = eff_res[SIGNAL_ID]
+
+
+
+
+	# # Debug
+	# if len(actions_to_process) > 0:
+	# 	debug_log('actions', list(actions_to_process))
+
+	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
+	# End Debug
+
 
 
 
@@ -426,6 +440,8 @@ def draw() -> Eff(ACTIONS)[None]:
 	global state
 
 	im.show_metrics_window()
+	im.show_test_window()
+
 
 
 	# ------------------------
@@ -440,7 +456,6 @@ def draw() -> Eff(ACTIONS)[None]:
 	# )
 	with window(name="test", flags=t_flags):
 		im.button("bloop")
-
 	# 	pos = util.point_offset(im.get_window_position(), im.Vec2(40, 80))
 	# 	im.set_next_window_position(pos.x, pos.y)
 	# 	with window(name="a window"):
@@ -624,7 +639,6 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	im.show_style_editor()
 
-	# debug_log_dict('ui', ui)
 	# debug_log_dict("first plot", state.plots[PLOT_1_ID].as_dict())
 
  	
@@ -635,8 +649,10 @@ def draw() -> Eff(ACTIONS)[None]:
 
 if __name__ == "__main__":
 	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw_and_log_actions, post_frame=sensa_post_frame,
-					   target_framerate=target_framerate, window_title=window_title,
+					   target_framerate=target_framerate,
+					   window_title=window_title,
 					   window_size=initital_window_size)
+
 
 
 # if imgui.begin_main_menu_bar():

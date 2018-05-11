@@ -19,7 +19,6 @@ from types_util import (
 	IO_, IMGui,
 )
 
-
 from imgui_widget import window #, group, child
 
 from sensa_util import (
@@ -30,6 +29,7 @@ from sensa_util import (
 )
 
 from functools import reduce
+import traceback
 
 from flags import DEBUG 
 
@@ -66,6 +66,7 @@ def debug_initialize():
 		values=OrderedDict(),
 		dicts=OrderedDict(),
 		sequences=OrderedDict(),
+		crash=None
 	)
 
 
@@ -111,19 +112,43 @@ def debug_log_seq(name: str, seq: Sequence[A]) -> Debug[None]:
 		return
 	debug_dict['sequences'][name] = seq
 
-
+def debug_log_crash(origin: str, cause, exception: Exception) -> Debug[None]:
+	if not DEBUG:
+		return
+	debug_dict['crash'] = {'origin': origin, 'cause': cause, 'exception': exception}
 
 
 def debug_window() -> IMGui[None]:
 	with window(name="debug"):
 		debug_window_draw_start_t_s = glfw.get_time()
 
+		if debug_dict['crash'] is not None:
+			origin    = debug_dict['crash']['origin']
+			cause     = debug_dict['crash']['cause']
+			exception = debug_dict['crash']['exception']
+			with window(name="Crash report"):
+				im.text('Exception raised during `{}`. State rolled back'.format(origin))
+				im.text('Caused by:')
+				im.text('\t'+repr(cause))
+
+				im.text('\n'+ str(exception.__cause__) if exception.__cause__ is not None else '')
+				for line in traceback.format_tb(exception.__traceback__):
+					im.text(line)
+				im.text(str.join(', ', map(str, exception.args) ))
+
+				if im.button('close'):
+					debug_dict['crash'] = None
+
+
 
 		# print some general app state
 		# im.text("actions: "+str(frame_actions))
 		im.text("mouse:   "+str(get_mouse_position()))
-		im.text("drag-d:  "+str(im.get_mouse_drag_delta()))
+		im.text("click:   "+str(im.is_mouse_clicked(button=0)))
+		im.text("down:    "+str(im.is_mouse_down(button=0)))
+		im.text("cl+down: "+str(im.is_mouse_clicked(button=0) and im.is_mouse_down(button=0)))
 		im.text("drag:    "+str(im.is_mouse_dragging(button=0)))
+		im.text("drag-d:  "+str(im.get_mouse_drag_delta()))
 		im.new_line()
 
 		# print the avg durations of ranges set with `debug_log_time`
