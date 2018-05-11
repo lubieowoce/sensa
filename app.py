@@ -6,7 +6,7 @@ from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 
 from typing import (
 	Any,
-	# List,
+	NamedTuple, Optional, Union,
 )
 from types_util import (
 	PMap_,
@@ -21,6 +21,7 @@ from debug_util import (
 	debug_post_frame,
 )
 
+from uniontype import union
 
 # from id_eff import IdEff, id_and_effects, run_id_eff, get_ids
 from eff import (
@@ -34,7 +35,7 @@ from eff import (
 
 from imgui_widget import window, child
 
-import node_graph
+import node_graph as ng
 
 from signal_source import (
 	initial_source_state,
@@ -233,16 +234,17 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 
 	for group in (source_boxes, filter_boxes, plots):
 		for (id_, box) in group.items():
-			emit(node_graph.AddNode(id_, box.to_node()))
+			emit(ng.AddNode(id_, box.to_node()))
 
 	return m(
-		graph = node_graph.empty_graph,
+		graph = ng.empty_graph,
 
 		data = m(
 			signals = m(),      # type: PMap_[SignalId, Signal]
 			signal_names = m(), # type: PMap_[SignalId, str]
 			box_outputs = m()    # type: PMap_[Id, Maybe[Signal]] 
 	    ),
+	    link_selection = LinkSelection.empty,
 		source_boxes = source_boxes,
 		plots = plots,
 		filter_boxes = filter_boxes,
@@ -267,11 +269,33 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 	new_state = None
 	o_changed_box = None
 
-	if type(action) == node_graph.GraphAction:
-		graph = state.graph
-		new_state = state.set('graph', node_graph.update_graph(graph, action))
+	if type(action) == LinkSelectionAction:
+		old_link_selection = state.link_selection
+		link_selection = update_link_selection(old_link_selection, state.graph, action)
+		
+		if link_selection.src_slot != None and link_selection.dst_slot != None:
+			link = (link_selection.src_slot, link_selection.dst_slot)
 
-	if type(action) == SourceAction:
+			can_create_link     = ng.is_input_slot_free(state.graph, link[1])
+			link_already_exists = link in state.graph.links
+			if link_already_exists:
+				emit( ng.Disconnect(*link) )
+			elif can_create_link:
+				emit( ng.Connect(*link) )
+			else: 
+				# link is invalid - e.g. connects to a filled slot
+				# but we empty it after anyway, so do nothing
+				pass
+			
+			link_selection = LinkSelection.empty
+
+		new_state = state.set('link_selection', link_selection)
+
+	elif type(action) == ng.GraphAction:
+		graph = state.graph
+		new_state = state.set('graph', ng.update_graph(graph, action))
+
+	elif type(action) == SourceAction:
 		debug_log('updating', 'source')
 		target_id = action.id_
 
@@ -317,8 +341,8 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 
 	if o_changed_box != None:
-		# emit(node_graph.NodeChanged(id_=o_changed_box))
-		emit_effect(node_graph.EvalGraph())
+		# emit(ng.NodeChanged(id_=o_changed_box))
+		emit_effect(ng.EvalGraph())
 
 	return new_state if new_state != None else state
 
@@ -343,9 +367,9 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 									.set('signals',      new_signals)
 									.set('signal_names', new_signal_names)
 						)
-	elif type(command) == node_graph.GraphEffect:
+	elif type(command) == ng.GraphEffect:
 		boxes = sum((state.source_boxes, state.filter_boxes, state.plots), m())
-		new_box_outputs = node_graph.handle_graph_effect(
+		new_box_outputs = ng.handle_graph_effect(
 								graph=state.graph,
 								source_signals=state.data.signals,
 								boxes=boxes,
@@ -360,6 +384,37 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 
 
 # =======================================================
+
+LinkSelection = NamedTuple('LinkSelection', [
+							('src_slot', Optional[ng.OutputSlotId]),
+							('dst_slot', Optional[ng.InputSlotId]) ])
+LinkSelection.empty = LinkSelection(src_slot=None, dst_slot=None)
+
+LinkSelectionAction, \
+	ClickOutput, \
+	ClickInput, \
+	Clear, \
+= union( 
+'LinkSelectionAction', [
+	('ClickOutput',  [('slot', ng.OutputSlotId)]),
+	('ClickInput',   [('slot', ng.InputSlotId)]),
+	('Clear', [])
+ ])
+
+
+def update_link_selection(state: LinkSelection, graph, action: LinkSelectionAction) -> LinkSelection:
+	if action.is_ClickOutput():
+		return (LinkSelection.empty  if state.src_slot != None else
+				state._replace(src_slot=action.slot) )
+
+	if action.is_ClickInput():
+		return (LinkSelection.empty  if state.dst_slot != None else
+				state._replace(dst_slot=action.slot) )
+
+	elif action.is_Clear(): return LinkSelection.empty
+	else: util.impossible()
+
+# ----------------------------------------------------------
 
 
 
@@ -440,7 +495,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# ----------------------------
-	node_graph.graph_window(state.graph)
+	# ng.graph_window(state.graph)
 
 
 	prev_color_window_background = im.get_style().color(im.COLOR_WINDOW_BACKGROUND)
@@ -457,8 +512,9 @@ def draw() -> Eff(ACTIONS)[None]:
 					| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
 				)
 				):
-		positions = {}
-		inputs = node_graph.get_inputs(state.graph, state.data.box_outputs)
+		box_positions = {}
+		inputs = ng.get_inputs(state.graph, state.data.box_outputs)
+
 
 		im.push_style_color(im.COLOR_WINDOW_BACKGROUND, *prev_color_window_background)
 
@@ -466,71 +522,104 @@ def draw() -> Eff(ACTIONS)[None]:
 		pos = signal_source_window(state.source_boxes[SOURCE_BOX_ID],
 							 state.data.signals,
 							 state.data.signal_names)
-		positions[SOURCE_BOX_ID] = pos
+		box_positions[SOURCE_BOX_ID] = pos
 
 
 		# signal plot 1
 		pos = signal_plot_window(state.plots[PLOT_1_ID],
-							inputs,
+							inputs[PLOT_1_ID],
 							ui_settings=ui['settings'])
-		positions[PLOT_1_ID] = pos
+		box_positions[PLOT_1_ID] = pos
 
 
 		# filter box 1
 		pos = filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
 						  	ui_settings=ui_settings)
-		positions[FILTER_BOX_1_ID] = pos
+		box_positions[FILTER_BOX_1_ID] = pos
 
 
 		# filter box 2
 		pos = filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
 						  	ui_settings=ui_settings)
-		positions[FILTER_BOX_2_ID] = pos
+		box_positions[FILTER_BOX_2_ID] = pos
 
 
 		# signal plot 2
 		pos = signal_plot_window(state.plots[PLOT_2_ID],
-							inputs,
+							inputs[PLOT_2_ID],
 							ui_settings=ui['settings'])
-		positions[PLOT_2_ID] = pos
+		box_positions[PLOT_2_ID] = pos
 
 		
+		im.pop_style_color()
+
+
 
 		# connections between boxes
+		link_selection = state.link_selection
+
 		prev_cursor_screen_pos = im.get_cursor_screen_position()
 
+		# get slot coords and draw slots
+		im.push_style_color(im.COLOR_CHECK_MARK, *(0, 0, 0, 100/255))
 
 		draw_list = im.get_window_draw_list()
 		SPACING = 20.
-		slot_positions = {}
-		IN = 0; OUT = 1;
-		for (id_, position) in positions.items():
+		slot_center_positions = {}
+
+		for (id_, position) in box_positions.items():
 			node = state.graph.nodes[id_]
 
 			left_x = position.top_left.x
 			right_x = position.bottom_right.x
 			top_y = position.top_left.y
 
-			for ix in range(node.n_inputs):
-				pos = im.Vec2(left_x-20-3, top_y+30+ix*SPACING)
-				slot_positions[(IN, id_, ix)] = pos
+			for slot_ix in range(node.n_inputs):
+				pos = im.Vec2(left_x-20-3, top_y+30+slot_ix*SPACING)
 				im.set_cursor_screen_position(pos)
-				im.radio_button("##in{}{}".format(id_, ix), False)
 
-			for ix in range(node.n_outputs):
-				pos = im.Vec2(right_x+3, top_y+30+ix*SPACING)
-				slot_positions[(OUT, id_, ix)] = pos
+				slot = ng.InputSlotId(id_, slot_ix)
+				was_selected = (slot == link_selection.dst_slot)
+
+				changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
+				if changed:
+					emit(ClickInput(slot))
+
+				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+				slot_center_positions[('in', id_, slot_ix)] = center_pos
+
+			for slot_ix in range(node.n_outputs):
+				pos = im.Vec2(right_x+3, top_y+30+slot_ix*SPACING)
 				im.set_cursor_screen_position(pos)
-				im.radio_button("##out{}{}".format(id_, ix), False)
 
+				slot = ng.OutputSlotId(id_, slot_ix)
+				was_selected = (slot == link_selection.src_slot)
+
+				changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
+				if changed:
+					emit(ClickOutput(slot))
+
+				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+				slot_center_positions[('out', id_, slot_ix)] = center_pos
+
+		im.pop_style_color()
+		
+
+
+
+
+		# draw links
 		for (src, dst) in state.graph.links:
-			src_pos = slot_positions[(OUT, src.node_id, src.ix)]
-			dst_pos = slot_positions[(IN,  dst.node_id, dst.ix)]
-			draw_list.add_line(src_pos, dst_pos, color=(0.,0.,0.,1.))
+			src_pos = slot_center_positions[('out', src.node_id, src.ix)]
+			dst_pos = slot_center_positions[('in',  dst.node_id, dst.ix)]
+			draw_list.add_line(src_pos, dst_pos, color=(0.5, 0.5, 0.5, 1.), thickness=2.)
+
 
 		im.set_cursor_screen_position(prev_cursor_screen_pos)
-		im.pop_style_color()
+	# end nodes window
+
 	im.pop_style_color()
+
 
 	im.show_style_editor()
 

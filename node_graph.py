@@ -153,6 +153,12 @@ def filled_input_slots(graph: Graph) -> Set[InputSlotId]:
 def free_input_slots(graph: Graph) -> Set[InputSlotId]:
 	return input_slots(graph) - filled_input_slots(graph)
 
+def is_input_slot_free(graph: Graph, input_slot: InputSlotId) -> bool:
+	return input_slot in free_input_slots(graph)
+
+def is_input_slot_filled(graph: Graph, input_slot: InputSlotId) -> bool:
+	return input_slot in filled_input_slots(graph)
+
 def parent_nodes(graph: Graph, node_id: Id) -> List[Id]:
 	return [src_slot.node_id
 			for (src_slot, dst_slot) in graph.links
@@ -264,6 +270,30 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 
 
 def get_inputs(graph: Graph, output_values: Dict[Id, List[Maybe[Signal]]]) -> Dict[Id, List[Maybe[Signal]]]:
+	""" Given a `graph` that describes the connections between nodes,
+	where nodes are identified by `Id`'s
+	and the `output_values` of each node in the graph (what each node outputs),
+	computes and returns the input values that each node would receive.
+
+	Example:
+
+	[1]=--("a")-->=[ 2 ]=
+				  =[   ]
+
+	Node 1 takes no inputs, and outputs "a" into node 2's slot 0.
+	Node 2 takes two inputs: slot 0 receives "a",
+							 slot 1 receives nothing, because is not connected to anything
+		   and one output. (it doesn't output anything yet though, as it has no input on slot 1)
+
+	So `output_values` is:
+		{1: [Just("a")], 
+		 2: [Nothing()]}
+
+
+	In this situation, `get_inputs` would return:
+		{1: [], 					 # empty list - 0 inputs, because node 1 takes no inputs
+		 2: [Just("a"), Nothing()]}  # 2 values, one for each input slot
+	 """
 	return \
 		{ id_: [m_src_slot >> (lambda src_slot: output_values[src_slot.node_id][src_slot.ix])
 				for m_src_slot in slot_sources(graph, id_)]
