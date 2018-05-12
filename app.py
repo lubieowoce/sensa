@@ -6,8 +6,9 @@ from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 
 from typing import (
 	Any,
-	NamedTuple, Optional, Union,
+	NamedTuple, Optional, Union, Tuple
 )
+from collections import deque
 
 import pickle
 
@@ -26,6 +27,9 @@ from debug_util import (
 )
 
 from uniontype import union
+
+
+import persist
 
 from eff import (
 	Eff, run_eff,
@@ -79,7 +83,8 @@ target_framerate = 30.
 
 INITIAL_ACTIONS = [FileAction.Load(filename=example_file_path)]
 
-
+STATE_SAVEFILE_NAME               = 'sensa_state.pickle'
+USER_ACTION_HISTORY_SAVEFILE_NAME = 'sensa_actions_history.pickle'
 
 
 current_id = None
@@ -88,6 +93,7 @@ state = None
 ui = None
 
 frame_actions = None
+user_action_history = None
 
 
 
@@ -96,6 +102,7 @@ def sensa_app_init():
 	global current_signal_id
 	global state
 	global frame_actions
+	global user_action_history
 	global ui
 
 	if flags.DEBUG:
@@ -144,6 +151,8 @@ def sensa_app_init():
 	# End Demo
 
 
+	user_action_history = deque()
+
 	ui = {
 		'settings': {
 			'plot_window_movable': True,
@@ -170,56 +179,90 @@ def draw_and_log_actions() -> IO_[None]:
 def sensa_post_frame() -> IO_[None]:
 	global state
 	global frame_actions
+	global current_id
+	global current_signal_id
+	global user_action_history
 
-	update_state_with_frame_actions_and_run_effects()
+	user_action_history.extend(frame_actions)
+	msg = update_state_with_actions_and_run_effects(frame_actions)
 	frame_actions.clear()
 
+	if msg.is_Success():
+		pass
+
+	elif msg.is_Crash():
+		debug_log_crash(origin=msg.origin, cause=msg.action, exception=msg.ex)
+
+	elif msg.is_DoApp():
+		command = msg.command
+		if command.is_SaveState():
+			with open(STATE_SAVEFILE_NAME, mode='wb') as savefile:
+				pickle.dump((state, current_id, current_signal_id), file=savefile)
+
+		elif command.is_LoadState():
+			with open(STATE_SAVEFILE_NAME, mode='rb') as savefile:
+				state, current_id, current_signal_id = pickle.load(file=savefile)
+
+		elif command.is_SaveUserActionHistory():
+			with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='wb') as savefile:
+				persist.dump_all(user_action_history, file=savefile)
+
+		elif command.is_LoadUserActionHistory():
+			with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='rb') as savefile:
+				user_action_history = deque(persist.load_all(file=savefile))
+
+		elif command.is_RederiveState():
+			# restart everything
+			actions_to_apply = [action for action in user_action_history
+										if not (type(action)==AppStateAction)]
+			sensa_app_init()
+			_ = update_state_with_actions_and_run_effects(actions_to_apply)
+			# TODO: ^ it might be useful to distinguish internal effects and
+			# external (IO) effects, ie file access. Rerunning internal effects
+			# is safe, but running an IO effect twice might give different results
+
+		else: util.impossible('unknown AppStateEffect: ' + repr(command))
+
+
 	if flags.DEBUG:
+		debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
 		debug_post_frame()
 		debug_window()
 
 
 
 
-def update_state_with_frame_actions_and_run_effects() -> IO_[None]:
+def update_state_with_actions_and_run_effects(user_actions) -> IO_[Tuple[str, Any]]:
 	global state
-	global frame_actions
+	global current_id
 	global current_signal_id
+	global user_action_history
 
-	actions_to_process = frame_actions[:]
+	actions_to_process = user_actions[:]
 
 	for action in actions_to_process:
 		try:
-			# note: `frame_actions` might be modified if `update` emits actions
 			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
-
 		except Exception as ex:
-			debug_log_crash(origin='update', cause=action, exception=ex)
-			actions_to_process.clear()
-			break
+			return Crash(origin='update', cause=action, exception=ex)
 
-		else:
-			actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
-			debug_log('effects', eff_res[EFFECTS])
-			for command in eff_res[EFFECTS]:
-				try:
-					state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
-				except Exception as ex:
-					debug_log_crash(origin='handle', cause=command, exception=ex)
-					break
-				else:
-					current_signal_id = eff_res[SIGNAL_ID]
+		debug_log('effects', eff_res[EFFECTS])
+		for command in eff_res[EFFECTS]:
+			if type(command) == AppStateEffect:
+				return DoApp(command=command)
 
+			try:
+				state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			except Exception as ex:
+				return Crash(origin='handle', cause=command, exception=ex)
+			
+			current_signal_id = eff_res[SIGNAL_ID]
 
 
+	return Success()
 
-	# # Debug
-	# if len(actions_to_process) > 0:
-	# 	debug_log('actions', list(actions_to_process))
-
-	debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
-	# End Debug
 
 
 
@@ -266,6 +309,8 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 		source_boxes = source_boxes,
 		plots = plots,
 		filter_boxes = filter_boxes,
+
+		n_actions=0
 	)
 
 # Demo
@@ -357,9 +402,10 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		if action.is_Load():
 			emit_effect( FileEffect.Load(action.filename) )
 
-	elif type(action) == PersistenceAction:
-		emit_effect({SaveState(): PersistenceEffect.SaveState(),
-					 LoadState(): PersistenceEffect.LoadState()}[action])
+	elif type(action) == AppStateAction:
+		emit_effect({SaveState():     AppStateEffect.SaveState(),
+					 LoadState():     AppStateEffect.LoadState(),
+					 RederiveState(): AppStateEffect.RederiveState()}[action])
 
 	else: util.impossible('unknown action of type {}:  {}'.format(type(action), action))
 
@@ -368,16 +414,59 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		# emit(ng.NodeChanged(id_=o_changed_box))
 		emit_effect(ng.EvalGraph())
 
-	return new_state if new_state != None else state
-
-
-
-
+	return (new_state if new_state is not None else state) \
+			.transform(['n_actions'], lambda x: x+1)	
 
 
 
 
 # ------------------------
+
+
+AppStateAction, \
+	SaveState, \
+	LoadState, \
+    SaveUserActionHistory, \
+	LoadUserActionHistory, \
+	RederiveState, \
+= union(
+'AppStateAction', [
+	('SaveState', []),
+	('LoadState', []),
+	('SaveUserActionHistory', []),
+	('LoadUserActionHistory', []),
+	('RederiveState', []),
+])
+
+
+AppStateEffect, \
+	SaveState_, \
+	LoadState_, \
+	SaveUserActionHistory, \
+	LoadUserActionHistory, \
+	RederiveState, \
+= union(
+'AppStateEffect', [
+	('SaveState', []),
+	('LoadState', []),
+	('SaveUserActionHistory', []),
+	('LoadUserActionHistory', []),
+	('RederiveState', []),
+])
+
+
+AppControl, \
+	Success, \
+	Crash, \
+	DoApp, \
+= union(
+'AppControl', [
+	('Success', []), \
+	('Crash', [('cause', str), ('origin', str), ('exception', Exception)]), \
+	('DoApp', [('command', AppStateEffect)]), \
+])
+
+
 
 @effectful(SIGNAL_ID)
 def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
@@ -404,21 +493,14 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		data = state['data']
 		return state.set('data', data.set('box_outputs', new_box_outputs))  
 
-	elif type(command) == PersistenceEffect:
-		if command.is_SaveState():
-			with open('sensa_state.pickle', mode='wb') as savefile:
-				pickle.dump((state, current_id, current_signal_id), file=savefile)
-			return state
-
-		elif command.is_LoadState():
-			with open('sensa_state.pickle', mode='rb') as savefile:
-				(new_state, current_id, current_signal_id) = pickle.load(file=savefile)
-			return new_state
-
-		else: util.impossible()
+	# AppStateEffects are processed in `update_state_with_frame_actions_and_run_effects`
 
 	else: util.impossible('unknown command of type {}:  {}'.format(type(command), command))
 		
+
+
+
+
 
 
 # =======================================================
@@ -453,25 +535,6 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 	else: util.impossible()
 
 # ----------------------------------------------------------
-
-PersistenceAction, \
-	SaveState, \
-	LoadState, \
-= union(
-'PersistenceAction', [
-	('SaveState', []),
-	('LoadState', []),
-])
-
-PersistenceEffect, \
-	SaveState_, \
-	LoadState_, \
-= union(
-'PersistenceEffect', [
-	('SaveState', []),
-	('LoadState', []),
-])
-
 
 
 @effectful(ACTIONS)
@@ -550,13 +613,20 @@ def draw() -> Eff(ACTIONS)[None]:
 		if changed:
 			ui_settings['filter_slider_power'] = val
 
-		if im.button("save state"):
-			emit(PersistenceAction.SaveState())
-
+		im.text("state | ")
 		im.same_line()
 
-		if im.button("load state"):
-			emit(PersistenceAction.LoadState())
+		if im.button("dump"):
+			emit(AppStateAction.SaveState())
+		im.same_line()
+
+
+		if im.button("load"):
+			emit(AppStateAction.LoadState())
+		im.same_line()
+
+		if im.button("rederive"):
+			emit(AppStateAction.RederiveState())
 
 
 
