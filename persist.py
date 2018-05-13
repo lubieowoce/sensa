@@ -3,10 +3,10 @@ import pickle
 
 
 def dump_all(objs: Iterable[Any], file):
-	""" Append each object to the pickle file.
+	""" Write each object to the pickle file.
 	Does not close the file """
 
-	assert file.mode == 'ab', "File must be opened in append-binary ('ab') mode: " + repr(file)
+	assert file.mode == 'wb', "File must be opened in write-binary ('ab') mode: " + repr(file)
 	pickler = pickle.Pickler(file)
 	for obj in objs:
 		pickler.dump(obj)

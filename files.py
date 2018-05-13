@@ -70,7 +70,7 @@ def handle_file_effect(signals: PMap_[SignalId, Signal],
 		new_signal_names = {sig_id: name
 							for (sig_id, name)
 							in zip(get_signal_ids(n_signals),
-								   new_signals.keys())
+								   sorted(new_signals.keys())) # sorted so that ids are assigned deterministaclly
 						   }
 		# then, map the ids to the correct signals
 		new_signals = {sig_id: new_signals[sig_name]

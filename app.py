@@ -1,16 +1,34 @@
-from imgui_glfw_app import run_imgui_glfw_app
+"""
+This module doesn't run anything.
+It only declares procedures (callbacks) and settings which
+`main.py` will pass to `imgui_glfw.run_reloadable_imgui_app()`,
+in particular:
+	__app_init__
+	__draw__
+	__post_frame__
+	__settings__
+
+Because `run_reloadable_imgui_app` takes
+this whole module as an argument (to enable reloading)
+and then picks out the values it needs, the above 
+procedures/values have underscored names to follow
+python's `__implements_a_protocol__` convention.
+
+(the names are actually aliases - for example
+ `__post_frame__` is just an alias to `sensa_post_frame`.
+ See the bottom of the file.)
+"""
 
 import imgui as im
 
 from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
+from collections import deque
+import pickle
 
 from typing import (
 	Any,
 	NamedTuple, Optional, Union, Tuple
 )
-from collections import deque
-
-import pickle
 
 
 from types_util import (
@@ -19,17 +37,7 @@ from types_util import (
 	IO_,
 )
 
-from debug_util import (
-	debug_initialize,
-	debug_window,
-	debug_log, debug_log_dict, debug_log_crash,
-	debug_post_frame,
-)
-
 from uniontype import union
-
-
-import persist
 
 from eff import (
 	Eff, run_eff,
@@ -40,7 +48,11 @@ from eff import (
 	get_signal_ids,
 )
 
+import sensa_util as util
+
 from imgui_widget import window, child
+
+import persist
 
 import node_graph as ng
 
@@ -73,13 +85,17 @@ from files import (
 	example_file_path,
 )
 
+from debug_util import (
+	debug_initialize,
+	debug_window,
+	debug_log, debug_log_dict, debug_log_crash,
+	debug_post_frame,
+)
+
 import flags
 
-import sensa_util as util
 
-window_title = "Sensa"
-initital_window_size = (1280, 850)
-target_framerate = 30.
+
 
 INITIAL_ACTIONS = [FileAction.Load(filename=example_file_path)]
 
@@ -96,12 +112,21 @@ frame_actions = None
 user_action_history = None
 
 
-
 def sensa_app_init():
+	global __was_reloaded__
+
+	app_state_init()
+
+	if __was_reloaded__:
+		for cmd in (LoadUserActionHistory_(), RunHistory_()):
+			handle_app_state_effect(cmd)
+		__was_reloaded__ = False
+
+
+def app_state_init():
 	global current_id
 	global current_signal_id
 	global state
-	global frame_actions
 	global user_action_history
 	global ui
 
@@ -152,6 +177,12 @@ def sensa_app_init():
 
 
 	user_action_history = deque()
+	# TODO: ^ Maybe this shouldn't be here? action history is sort of meta,
+	# 		not exactly app state. This would follow the responsibility scope
+	#		of `update_state_with_actions_and_run_effects` - user action history
+	# 		is managed separately, by `handle_app_state_effects` (which maybe should be renamed...)
+	#		The problem is, sometimes re-initing the app state without clearing
+	#		user_action_history.
 
 	ui = {
 		'settings': {
@@ -160,6 +191,8 @@ def sensa_app_init():
 			'filter_slider_power': 3.0,
 		},
 	}
+
+
 
 	
 
@@ -176,12 +209,14 @@ def draw_and_log_actions() -> IO_[None]:
 
 
 
-def sensa_post_frame() -> IO_[None]:
+def sensa_post_frame() -> IO_[Optional[str]]:
 	global state
 	global frame_actions
 	global current_id
 	global current_signal_id
 	global user_action_history
+
+	msg_to_render_loop = None
 
 	user_action_history.extend(frame_actions)
 	msg = update_state_with_actions_and_run_effects(frame_actions)
@@ -193,50 +228,38 @@ def sensa_post_frame() -> IO_[None]:
 	elif msg.is_Crash():
 		debug_log_crash(origin=msg.origin, cause=msg.action, exception=msg.ex)
 
-	elif msg.is_DoApp():
+	elif msg.is_DoApp():	
+		handle_app_state_effect(msg.command)
+
+	elif msg.is_DoAppRunner():
 		command = msg.command
-		if command.is_SaveState():
-			with open(STATE_SAVEFILE_NAME, mode='wb') as savefile:
-				pickle.dump((state, current_id, current_signal_id), file=savefile)
+		if command.is_Reload():
+			handle_app_state_effect(SaveUserActionHistory_()) # preserve history across reloads
+			msg_to_render_loop = 'reload'
+		elif command.is_Exit():
+			msg_to_render_loop ='shutdown'
+		else: util.impossible("unknown DoAppRunner request" + repr(command))
 
-		elif command.is_LoadState():
-			with open(STATE_SAVEFILE_NAME, mode='rb') as savefile:
-				state, current_id, current_signal_id = pickle.load(file=savefile)
-
-		elif command.is_SaveUserActionHistory():
-			with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='wb') as savefile:
-				persist.dump_all(user_action_history, file=savefile)
-
-		elif command.is_LoadUserActionHistory():
-			with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='rb') as savefile:
-				user_action_history = deque(persist.load_all(file=savefile))
-
-		elif command.is_RederiveState():
-			# restart everything
-			actions_to_apply = [action for action in user_action_history
-										if not (type(action)==AppStateAction)]
-			sensa_app_init()
-			_ = update_state_with_actions_and_run_effects(actions_to_apply)
-			# TODO: ^ it might be useful to distinguish internal effects and
-			# external (IO) effects, ie file access. Rerunning internal effects
-			# is safe, but running an IO effect twice might give different results
-
-		else: util.impossible('unknown AppStateEffect: ' + repr(command))
+	else: util.impossible('unknown AppControl request:' + repr(msg))
 
 
+	# TODO: Not sure if this should be here...
+	#		post_frame shouldn't draw windows.
+	#		Either rename it or move the debug code.
 	if flags.DEBUG:
+		debug_log('n logged actions:', len(user_action_history))
 		debug_log_dict('state (no signals)', state.set('data', state.data.remove('signals')) )
 		debug_post_frame()
 		debug_window()
 
+	return msg_to_render_loop
 
 
 
-def update_state_with_actions_and_run_effects(user_actions) -> IO_[Tuple[str, Any]]:
+def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']:
 	global state
 	global current_id
 	global current_signal_id
-	global user_action_history
 
 	actions_to_process = user_actions[:]
 
@@ -244,18 +267,28 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_[Tuple[str, An
 		try:
 			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
 		except Exception as ex:
+			# state doesn't get updated, because the above assignment never ran
 			return Crash(origin='update', cause=action, exception=ex)
 
 		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
 		debug_log('effects', eff_res[EFFECTS])
 		for command in eff_res[EFFECTS]:
+
 			if type(command) == AppStateEffect:
 				return DoApp(command=command)
+			elif type(command) == AppRunnerEffect:
+				return DoAppRunner(command=command)
+			# ^ These effects affect the whole app, and can
+			# manage the action history, action saving, loading,
+			# app reloading, etc. This function only handles
+			# updates to actual app state, so it "passes the effects
+			# higher up" to be handled elswhere.
 
 			try:
 				state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			except Exception as ex:
+				# state doesn't get updated, because the above assignment never ran
 				return Crash(origin='handle', cause=command, exception=ex)
 			
 			current_signal_id = eff_res[SIGNAL_ID]
@@ -403,9 +436,24 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			emit_effect( FileEffect.Load(action.filename) )
 
 	elif type(action) == AppStateAction:
-		emit_effect({SaveState():     AppStateEffect.SaveState(),
-					 LoadState():     AppStateEffect.LoadState(),
-					 RederiveState(): AppStateEffect.RederiveState()}[action])
+		emit_effect(
+			{
+				ResetState():  ResetState_(),
+			 	SaveState():   SaveState_(),
+				LoadState():   LoadState_(),
+				ResetUserActionHistory(): ResetUserActionHistory_(),
+				SaveUserActionHistory():  SaveUserActionHistory_(),
+				LoadUserActionHistory():  LoadUserActionHistory_(),
+				RunHistory(): RunHistory_(),
+			}[action]
+		)
+	elif type(action) == AppRunnerAction:
+		emit_effect(
+			{
+				Reload(): Reload_(),
+			 	Exit():   Exit_(),
+			}[action]
+		)
 
 	else: util.impossible('unknown action of type {}:  {}'.format(type(action), action))
 
@@ -421,50 +469,6 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 
 # ------------------------
-
-
-AppStateAction, \
-	SaveState, \
-	LoadState, \
-    SaveUserActionHistory, \
-	LoadUserActionHistory, \
-	RederiveState, \
-= union(
-'AppStateAction', [
-	('SaveState', []),
-	('LoadState', []),
-	('SaveUserActionHistory', []),
-	('LoadUserActionHistory', []),
-	('RederiveState', []),
-])
-
-
-AppStateEffect, \
-	SaveState_, \
-	LoadState_, \
-	SaveUserActionHistory, \
-	LoadUserActionHistory, \
-	RederiveState, \
-= union(
-'AppStateEffect', [
-	('SaveState', []),
-	('LoadState', []),
-	('SaveUserActionHistory', []),
-	('LoadUserActionHistory', []),
-	('RederiveState', []),
-])
-
-
-AppControl, \
-	Success, \
-	Crash, \
-	DoApp, \
-= union(
-'AppControl', [
-	('Success', []), \
-	('Crash', [('cause', str), ('origin', str), ('exception', Exception)]), \
-	('DoApp', [('command', AppStateEffect)]), \
-])
 
 
 
@@ -493,12 +497,122 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 		data = state['data']
 		return state.set('data', data.set('box_outputs', new_box_outputs))  
 
-	# AppStateEffects are processed in `update_state_with_frame_actions_and_run_effects`
+	# AppStateEffects are processed with `handle_app_state_effect`
 
 	else: util.impossible('unknown command of type {}:  {}'.format(type(command), command))
 		
 
 
+# Actions to influence the app state
+# in ways that can be done from within
+# this module. In particular, this module
+# cannot directly terminate or reload itself -
+# the render loop in `reloadble_imgui_app`
+# has to handle those.
+
+AppStateAction, \
+	ResetState, \
+	SaveState, \
+	LoadState, \
+    ResetUserActionHistory, \
+    SaveUserActionHistory, \
+	LoadUserActionHistory, \
+	RunHistory, \
+= union(
+'AppStateAction', [
+	('ResetState', []),
+	('SaveState', []),
+	('LoadState', []),
+	('ResetUserActionHistory', []),
+	('SaveUserActionHistory', []),
+	('LoadUserActionHistory', []),
+	('RunHistory', []),
+])
+
+
+AppStateEffect, \
+	ResetState_, \
+	SaveState_, \
+	LoadState_, \
+	ResetUserActionHistory_, \
+	SaveUserActionHistory_, \
+	LoadUserActionHistory_, \
+	RunHistory_, \
+= union(
+'AppStateEffect', [
+	('ResetState', []),
+	('SaveState', []),
+	('LoadState', []),
+	('ResetUserActionHistory', []),
+	('SaveUserActionHistory', []),
+	('LoadUserActionHistory', []),
+	('RunHistory', []),
+])
+
+# Actions that only the loop that actually
+# runs the function can handle
+AppRunnerAction, Reload, Exit = \
+union(
+'AppRunnerAction', [('Reload', []), ('Exit', [])]
+)
+
+AppRunnerEffect, Reload_, Exit_ = \
+union(
+'AppRunnerEffect', [('Reload', []), ('Exit', [])]
+)
+
+AppControl, \
+	Success, \
+	Crash, \
+	DoApp, \
+	DoAppRunner, \
+= union(
+'AppControl', [
+	('Success', []),
+	('Crash', [('cause', str), ('origin', str), ('exception', Exception)]),
+	('DoApp', 		[('command', AppStateEffect)]),
+	('DoAppRunner', [('command', AppRunnerEffect)])
+])
+
+
+def handle_app_state_effect(command) -> IO_[None]:
+	global state
+	global current_id
+	global current_signal_id
+	global user_action_history
+	
+	if command.is_ResetState():
+		initialize_everything()
+
+	elif command.is_SaveState():
+		with open(STATE_SAVEFILE_NAME, mode='wb') as savefile:
+			pickle.dump((state, current_id, current_signal_id), file=savefile)
+
+	elif command.is_LoadState():
+		with open(STATE_SAVEFILE_NAME, mode='rb') as savefile:
+			state, current_id, current_signal_id = pickle.load(file=savefile)
+
+	elif command.is_ResetUserActionHistory():
+		user_action_history.clear()
+
+	elif command.is_SaveUserActionHistory():
+		with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='wb') as savefile:
+			persist.dump_all(user_action_history, file=savefile)
+
+	elif command.is_LoadUserActionHistory():
+		with open(USER_ACTION_HISTORY_SAVEFILE_NAME, mode='rb') as savefile:
+			user_action_history = deque(persist.load_all(file=savefile))
+
+	elif command.is_RunHistory():
+		# restart everything
+		actions_to_apply = [action for action in user_action_history
+									if type(action) not in (AppStateAction, AppRunnerAction)]
+		_ = update_state_with_actions_and_run_effects(actions_to_apply)
+		# TODO: ^ it might be useful to distinguish internal effects and
+		# external (IO) effects, ie file access. Rerunning internal effects
+		# is safe, but running an IO effect twice might give different results
+
+	else: util.impossible('unknown AppStateEffect: ' + repr(command))
 
 
 
@@ -549,7 +663,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# ------------------------
-	t_flags = 0
+	# t_flags = 0
 	# t_flags = (
 	# 	  im.WINDOW_NO_TITLE_BAR
 	# 	| im.WINDOW_NO_MOVE
@@ -558,8 +672,8 @@ def draw() -> Eff(ACTIONS)[None]:
 	# 	| im.WINDOW_NO_FOCUS_ON_APPEARING
 	# 	| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
 	# )
-	with window(name="test", flags=t_flags):
-		im.button("bloop")
+	# with window(name="test", flags=t_flags):
+	# 	im.button("bloop")
 	# 	pos = util.point_offset(im.get_window_position(), im.Vec2(40, 80))
 	# 	im.set_next_window_position(pos.x, pos.y)
 	# 	with window(name="a window"):
@@ -613,20 +727,47 @@ def draw() -> Eff(ACTIONS)[None]:
 		if changed:
 			ui_settings['filter_slider_power'] = val
 
+		if im.button("reload"):
+			emit(AppRunnerAction.Reload())
+
+		# im.same_line()
+		# im.button("ple ple ple")
+
 		im.text("state | ")
-		im.same_line()
 
-		if im.button("dump"):
+		im.same_line()
+		if im.button("dump##state"):
 			emit(AppStateAction.SaveState())
+
 		im.same_line()
-
-
-		if im.button("load"):
+		if im.button("load##state"):
 			emit(AppStateAction.LoadState())
-		im.same_line()
 
-		if im.button("rederive"):
-			emit(AppStateAction.RederiveState())
+		im.same_line()
+		if im.button("reset##state"):
+			emit(AppStateAction.ResetState())
+
+
+		im.text("history | ")
+
+		im.same_line()
+		if im.button("dump##history"):
+			emit(AppStateAction.SaveUserActionHistory())
+
+		im.same_line()
+		if im.button("load##history"):
+			emit(AppStateAction.LoadUserActionHistory())
+
+		im.same_line()
+		if im.button("reset##history"):
+			emit(AppStateAction.ResetUserActionHistory())
+
+		im.same_line()
+		if im.button("run##history"):
+			emit(AppStateAction.RunHistory())
+
+		# im.same_line()
+		# im.button("bla bla bla")
 
 
 
@@ -767,88 +908,13 @@ def draw() -> Eff(ACTIONS)[None]:
 
 # ===================================================
 
+__was_reloaded__ = None
+__app_init__   = sensa_app_init
+__draw__       = draw_and_log_actions
+__post_frame__ = sensa_post_frame
 
-
-if __name__ == "__main__":
-	run_imgui_glfw_app(app_init=sensa_app_init, draw=draw_and_log_actions, post_frame=sensa_post_frame,
-					   target_framerate=target_framerate,
-					   window_title=window_title,
-					   window_size=initital_window_size)
-
-
-
-# if imgui.begin_main_menu_bar():
-#     if imgui.begin_menu("File", True):
-
-#         clicked_quit, selected_quit = imgui.menu_item(
-#             "Quit", 'Cmd+Q', False, True
-#         )
-
-#         if clicked_quit:
-#             exit(1)
-
-#         imgui.end_menu()
-#     imgui.end_main_menu_bar()
-
-# imgui.show_test_window()
-
-# imgui.begin("Custom window", True)
-# imgui.text(str(frame_dur))
-# imgui.text_colored("Eggs", 0.2, 1., 0.)
-# imgui.end()
-
-
-
-# # drawing with begin and end
-# def draw(state):
-#     """
-#     imgui.new_frame() is called right before `draw` in main.
-#     imgui.render() is called `draw` returns.
-#     """
-#     im.begin("eeh")
-#     # im.begin_group()
-#     im.text("counters")
-#     with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
-#         im.begin_child("add+delete",  width=40, height=100)
-#         if im.button("+", width=30, height=30):
-#             if len(state['counters']) <= 0:
-#                 state['counters'][0] = 0
-#             else: # len(state['counters']) > 0
-#                 id = max(state['counters']) + 1
-#                 state['counters'][id] = 0
-			
-#         if im.button("-", width=30, height=30):
-#             if len(state['counters']) > 0:
-#                 last_id = max(state['counters'])
-#                 del state['counters'][last_id]
-
-#         im.end_child()
-
-#     im.same_line()
-#     for id in state['counters']:
-#         with im.styled(im.STYLE_CHILD_WINDOW_ROUNDING, im.STYLE_WINDOW_ROUNDING):
-#             im.begin_child("counter "+str(id),  width=100, height=100, border=True)
-
-#             im.text(str(state['counters'][id]))
-
-#             imgui.separator()
-
-#             changed, new_val = \
-#                 im.input_text('value', value=str(state['counters'][id]),
-#                               buffer_length=1000,
-#                               flags=im.INPUT_TEXT_ENTER_RETURNS_TRUE | im.INPUT_TEXT_CHARS_DECIMAL)
-#             if changed:
-#                 state['counters'][id] = int(new_val)
-
-
-#             if im.button("+"):
-#                 state['counters'][id] += 1
-
-#             if im.button("-"):
-#                 state['counters'][id] -= 1
-
-#             im.end_child()
-#         im.same_line()
-
-#     im.new_line()
-#     im.end()
+__settings__ = {
+	'window_title': "Sensa",
+	'initital_window_size': (1280, 850),
+	'target_framerate': 30.,
+}
