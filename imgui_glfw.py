@@ -9,7 +9,8 @@ import OpenGL.GL as gl
 
 from sys import exit
 from time import sleep
-import importlib
+# import importlib
+import reload_util as rlu
 
 import imgui
 from imgui.integrations.glfw import GlfwRenderer
@@ -28,7 +29,7 @@ def DEFAULT_DRAW():
 
 
 
-def run_reloadable_imgui_app(app_module):
+def run_reloadable_imgui_app(app_module, no_reload=()):
 
 	settings = getattr(app_module, '__settings__', {})
 
@@ -142,7 +143,7 @@ def run_reloadable_imgui_app(app_module):
 		if glfw.window_should_close(window) or m_request == 'shutdown':
 			break # end the reload loop, run user shutdown, close
 		elif m_request == 'reload':
-			importlib.reload(app_module)
+			rlu.recursive_reload(app_module, dir=rlu.module_dirpath(app_module), excluded=no_reload)
 			# TODO: recursively reload all dependencies of app module
 			#		(right now only the top-level app_module is reloaded)
 			setattr(app_module, '__was_reloaded__', True)

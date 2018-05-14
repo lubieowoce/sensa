@@ -8,7 +8,7 @@ from types_util import (
 	A,
 	Fun, 
 )
-
+import functools
 from sensa_util import identity
 
 import flags
@@ -141,18 +141,19 @@ def run_eff(f: Fun[..., Eff(...)[A]],
 
 if flags.DEBUG:
 	def effectful(*effect_types):
+
 		def effectful_decorator(f):
 
+			@functools.wraps(f) # preserve function name, signature, module name etc
 			def wrapped(*args, **kwargs):
 				assert is_in_eff(), "`is_in_eff()` failed. This computation is meant to be run using `run_eff`"
 				assert all_eff_operations_present(*effect_types), "Some eff operations are missing, (or their flags aren't set - `eff` bug)"
 
 				return f(*args, **kwargs)
 
-
-
 			wrapped.__effect_types__ = effect_types
 			return wrapped
+
 		return effectful_decorator
 
 else: # not flags.DEBUG -> no runtime check
