@@ -183,6 +183,7 @@ def read_signals(data_file: BinaryIO, hdr) -> Dict[str, Sequence[float]]:
 		signals[label] = scale(	hdr['signal_infos'][label]['physical_max'],
 								hdr['signal_infos'][label]['digital_max'],
 							  	np.array(signals[label].reshape(num_samples_in_record * num_records)))
+		signals[label].flags.writeable = False
 
 	return signals
 

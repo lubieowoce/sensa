@@ -1,8 +1,15 @@
-from typing import (Iterable, Any)
+"""
+This module defines some utility functions
+for persisting state to disk and loading it back.
+"""
+
+from typing import (Iterable, Iterator, Any)
+from types_util import (IO_)
+
 import pickle
 
 
-def dump_all(objs: Iterable[Any], file):
+def dump_all(objs: Iterable[Any], file) -> IO_[None]:
 	""" Write each object to the pickle file.
 	Does not close the file """
 
@@ -13,7 +20,7 @@ def dump_all(objs: Iterable[Any], file):
 
 
 
-def dump_append(obj, file):
+def dump_append(obj: Any, file) -> IO_[None]:
 	""" Append object to the pickle file.
 	Does not close the file """
 	assert file.mode == 'ab', "File must be opened in append-binary ('ab') mode: " + repr(file)
@@ -21,8 +28,8 @@ def dump_append(obj, file):
 
 
 
-def load_all(file):
-	""" Returns a generator that yields successive unpickled objects from `file`.
+def load_all(file) -> Iterable[IO_[Any]]:
+	""" Returns an iterator that yields successive unpickled objects from `file`.
 	The file can be a normal pickle file, or a file where multiple
 	pickled objects were appended.
 	Does not close the file """

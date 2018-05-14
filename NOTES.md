@@ -1,3 +1,5 @@
+## Pipenv 
+
 Install from github:
 ```
 > pipenv install git+http://github.com/lubieowoce/pyimgui#egg=imgui
@@ -6,7 +8,7 @@ Install from github:
 
 Install a package from a local directory into pipenv:
 ```
-> pipenv run pip install --editable ..\pyimgui[full]
+> pipenv install --editable ..\pyimgui[full]
 ```
 
 ## Pipenv troubleshooting

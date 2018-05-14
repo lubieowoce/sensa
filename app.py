@@ -731,6 +731,9 @@ def draw() -> Eff(ACTIONS)[None]:
 			emit(AppRunnerAction.Reload())
 
 		# im.same_line()
+		# im.button("bla bla bla")
+
+		# im.same_line()
 		# im.button("ple ple ple")
 
 		im.text("state | ")
@@ -766,8 +769,7 @@ def draw() -> Eff(ACTIONS)[None]:
 		if im.button("run##history"):
 			emit(AppStateAction.RunHistory())
 
-		# im.same_line()
-		# im.button("bla bla bla")
+
 
 
 

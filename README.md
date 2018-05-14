@@ -31,6 +31,9 @@ Done! 👍
 (hopefully) 
 
 
+TODO: Specify the right version to install in Pipfile?
+https://docs.pipenv.org/advanced/#specifying-basically-anything
+
 ### Unix-based systems
 
 Similar to Windows, but right now the Pipfile is set up to install a numpy binary. If you edit that out, it should work okay.
