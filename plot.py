@@ -14,6 +14,7 @@ from types_util import (
 )
 
 from imgui_widget import window, child
+from draggable import draggable
 
 from debug_util import (
 	debug_log, debug_log_time, #debug_log_dict,
@@ -54,6 +55,7 @@ from eeg_signal import Signal
 
 import math
 import numpy as np
+import scipy.ndimage
 # from pyrsistent import (m, pmap, v, pvector,)
 from uniontype import union
 
@@ -269,13 +271,11 @@ def signal_plot_window(
 
 
 	PLOT_WINDOW_FLAGS = 0 if ui_settings['plot_window_movable'] else im.WINDOW_NO_MOVE
-
-
 	plot_name = "Plot (id={id})###{id}".format(id=plot_box_state.id_)
 
 	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
 
-		plot_width = 0. # auto
+		plot_width = -1. # auto
 		plot_height = im.get_content_region_available().y - 20
 
 
@@ -293,7 +293,7 @@ def signal_plot_window(
 
 		return get_window_rect()
 
-
+@effectful(ACTIONS)
 def signal_plot(plot_box_state: PlotState,
 				m_signal: Maybe[Signal],
 				width: float,
@@ -304,25 +304,32 @@ def signal_plot(plot_box_state: PlotState,
 	
 	# m_signal = box_inputs[plot_box_state.id_][0]
 	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
+	emit = eff_operation('emit')
+	drag_state = plot_box_state .drag_state
 
 	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
-	with child(name="signal_plot##"+str(plot_box_state.id_),  width=width, height=height, border=True,
-               styles={im.STYLE_CHILD_WINDOW_ROUNDING: im.STYLE_WINDOW_ROUNDING}):
-		plot_draw_area = get_window_rect()
-		draw_list = im.get_window_draw_list()
+	with draggable(name="signal_plot##"+str(plot_box_state.id_),
+					was_held=drag_state.is_Dragging(),
+					width=width, height=height) as (status, is_held):
+		if status == 'pressed':
+			emit( StartDrag(id_=plot_box_state.id_) )
+		elif status == 'released':
+			emit( EndDrag(id_=plot_box_state.id_) )
+
+		# im.text("{!r:<10}   {!r:<5}".format(status, is_held))
 
 		if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
 			im.text("Not ready")
 
 		elif m_signal.is_Just():
+			plot_draw_area = get_window_rect()
+			draw_list = im.get_window_draw_list()
 			signal = m_signal.val
 			show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
-
 			plot_react_to_drag(plot_box_state, signal, plot_draw_area,
 				   ui_settings=ui_settings)
 
 	im.pop_style_color()
-
 
 
 
@@ -368,44 +375,12 @@ def plot_react_to_drag(plot_box_state: PlotState,
 										        .format(__start_t, __end_t, 0., max_t)
 
 
-	# HANDLING USER INPUT (long)
-
-	# crude dragging state machine
 	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
-
-	debug_log('plot drag: clicked:', im.is_mouse_clicked(button=0))
-	debug_log('plot drag: down:', im.is_mouse_down(button=0))
-	debug_log('plot drag: both:', im.is_mouse_clicked(button=0) and im.is_mouse_dragging(button=0))
-	if (plot_box_state.drag_state.is_NotDragging() 
-		and im.is_mouse_clicked(button=0)
-		and is_in_rect(drag_origin, plot_draw_area)
-		# and im.is_mouse_dragging(button=0)
-	   ):
-		# just begun dragging
-		emit( StartDrag(id_=plot_box_state.id_) )
-		
-	if (plot_box_state.drag_state.is_Dragging() 
-		and im.is_mouse_up(button=0)
-		# and not im.is_mouse_dragging(button=0)
-	   ):
-		# just ended dragging
-		emit( EndDrag(id_=plot_box_state.id_) )
-		return
-		# ^ Return early - imgui already thinks the drag has ended,
-		# and im.get_mouse_drag_delta() will return (-1, -1), so the plot
-		# will get updated badly.
-
-	# end dragging state machine
-
-
-
-	# code that might change the time range starts here
 
 	updated_time_range = time_range  # if no drag or < > button input
 
 
 	# DRAGGING
-
 
 	if plot_box_state.drag_state.is_Dragging():
 
@@ -564,13 +539,21 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 			point_times = np.linspace(start=0., stop=(len(signal.data)-1)*time_between_samples, num=len(signal.data)) 
 			sampled_times = np.linspace(start=start_t, stop=end_t, num=n_points_in_plot)
 			data_part = np.interp(x=sampled_times, xp=point_times, fp=signal.data)
+		elif ui_settings['scipy_resample']:
+			# apparently slower than np.interp for large inputs
+			data_part = scipy.ndimage.interpolation.zoom(
+							signal.data[first_ix: last_ix+1],
+							zoom=(n_points_in_plot/n_samples_in_range),
+							# order=5,
+							prefilter=True,
+						)[:n_points_in_plot]
 		else:
 			data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
 	else: # n_samples_in_range <= n_points_in_plot
 		assert n_points_in_plot == n_samples_in_range
 		data_part = signal.data[first_ix : last_ix+1] 
 
-	assert n_points_in_plot == len(data_part)
+	assert n_points_in_plot == len(data_part), "need: {}, got: {}".format(n_points_in_plot, len(data_part))
 
 	# map the data points to pixel heights
 

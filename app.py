@@ -51,6 +51,7 @@ from eff import (
 import sensa_util as util
 
 from imgui_widget import window, child
+from draggable import draggable
 
 import persist
 
@@ -187,7 +188,9 @@ def app_state_init():
 	ui = {
 		'settings': {
 			'plot_window_movable': True,
-			'numpy_resample': True,
+			'numpy_resample': False,
+			'scipy_resample': True,
+
 			'filter_slider_power': 3.0,
 		},
 	}
@@ -569,7 +572,7 @@ AppControl, \
 = union(
 'AppControl', [
 	('Success', []),
-	('Crash', [('cause', str), ('origin', str), ('exception', Exception)]),
+	('Crash', [('cause', object), ('origin', str), ('exception', Exception)]),
 	('DoApp', 		[('command', AppStateEffect)]),
 	('DoAppRunner', [('command', AppRunnerEffect)])
 ])
@@ -582,7 +585,7 @@ def handle_app_state_effect(command) -> IO_[None]:
 	global user_action_history
 	
 	if command.is_ResetState():
-		initialize_everything()
+		app_state_init()
 
 	elif command.is_SaveState():
 		with open(STATE_SAVEFILE_NAME, mode='wb') as savefile:
@@ -685,6 +688,18 @@ def draw() -> Eff(ACTIONS)[None]:
 	# 	im.text('TL: '+str(top_left))
 	# 	im.text('BR: '+str(bottom_right))
 	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
+	
+	with window(name="test"):
+			
+		with draggable("drag", ui.get("invisible_held", False),
+						width=-1, height=150) as (status, is_held):
+			im.text("drag me!")
+			im.text("{!r:<10}   {!r:<5}".format(status, is_held))
+			im.button("shouldn't click")
+			im.text(repr(im.get_mouse_drag_delta()))
+
+		ui["invisible_held"] = is_held
+		im.text("{!r:<10}   {!r:<5}".format(status, is_held))
 
 	with window(name="signals"):
 		if im.button("load example"):
@@ -715,11 +730,14 @@ def draw() -> Eff(ACTIONS)[None]:
 			ui_settings['plot_window_movable'] = move
 
 		im.same_line()
-
 		changed, val = im.checkbox("numpy resample", ui_settings['numpy_resample'])
 		if changed:
 			ui_settings['numpy_resample'] = val
 
+		im.same_line()
+		changed, val = im.checkbox("scipy resample", ui_settings['scipy_resample'])
+		if changed:
+			ui_settings['scipy_resample'] = val
 
 		changed, val = im.slider_float('filter_slider_power', ui_settings['filter_slider_power'],
 									   min_value=1., max_value=5.,

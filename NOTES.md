@@ -13,6 +13,13 @@ Install a package from a local directory into pipenv:
 
 ## Pipenv troubleshooting
 
+`pipenv` can't lock the dependencies, and complains about `numpy` versions?
+Everything is installed fine, but pip's checker can't parse the version in the
+wheel file correctly. For some reason, when numpy is installed from Gohlke's wheel, the version is parsed as `1.14.1+mkl` instead of `1.14.1`, which pipenv 
+can't understand.
+TODO: This might be possible to fix by dropping the `+mkl` from the wheel's filename. 
+
+
 `pipenv` failing randomly, saying stuff like `WinError: cannot find file`?
 Make sure you don't have a `home` environment variable, it messed stuff up for me.
 
@@ -35,7 +42,7 @@ This maximal length also depends on the number of newlines.
 We hit this limit when displaying the entire `state` dict as a single string (around 3000 chars in length) - only around 2900 characters were shown.
 
 Repro:
-```
+```python
 from sensa_util import parts_of_len
 
 with window(name="test"):
