@@ -311,12 +311,13 @@ def signal_plot(plot_box_state: PlotState,
 	with draggable(name="signal_plot##"+str(plot_box_state.id_),
 					was_held=drag_state.is_Dragging(),
 					width=width, height=height) as (status, is_held):
+
 		if status == 'pressed':
 			emit( StartDrag(id_=plot_box_state.id_) )
 		elif status == 'released':
 			emit( EndDrag(id_=plot_box_state.id_) )
-
 		# im.text("{!r:<10}   {!r:<5}".format(status, is_held))
+
 
 		if m_signal.is_Nothing() or plot_box_state.plot_state.is_NoTimeRange():
 			im.text("Not ready")
@@ -326,46 +327,55 @@ def signal_plot(plot_box_state: PlotState,
 			draw_list = im.get_window_draw_list()
 			signal = m_signal.val
 			show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
-			plot_react_to_drag(plot_box_state, signal, plot_draw_area,
-				   ui_settings=ui_settings)
+
+			if status == 'held':
+				# Unfortunately, a StartDrag/EndDrag will only be processed after draw()
+				# So without this if, the drag code is called once before, and once after a drag ends,
+				# without being reflected in the drag_state.
+				# In the latter case, If the mouse isn't dragging, drag_delta == (0,0)
+				# So effectively, the state is set as if the mouse never moved.
+				drag_delta = im.get_mouse_drag_delta(button=0, lock_threshold=1.)
+				drag_origin = point_subtract_offset(get_mouse_position(), drag_delta)
+				
+				updated_time_range = time_range_after_drag(
+										plot_box_state, signal, plot_draw_area,
+										drag_origin, drag_delta
+									 )
+				if plot_box_state .plot_state .time_range != updated_time_range:
+					emit( SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
 
 	im.pop_style_color()
 
 
 
 
+# TODO: Switch it to a pure function that just
+# computes the new time range based on mouse position
+def time_range_after_drag(
+		plot_box_state: PlotState,
+		signal: Signal,
+		plot_draw_area: Rect,
+		drag_origin,
+		drag_delta
+		) -> TimeRange:
 
-@effectful(ACTIONS)
-def plot_react_to_drag(plot_box_state: PlotState,
-					   signal: Signal,
-					   plot_draw_area: Rect,
-					   ui_settings) -> Eff(ACTIONS)[None]:
-	emit = eff_operation('emit')
-
-	# if plot_box_state.connection_state.is_Disconnected() or plot_box_state.plot_state.is_NoTimeRange():
-	# 	return
-	# if plot_box_state.connection_state.is_Connected():
-	# 	m_signal = box_inputs[plot_box_state.id_][0]
-	# 	if m_signal.is_Nothing():
-	# 		return
-	# 	else:
-	# 		signal = m_signal.signal
-
-
-	width_px  = int(rect_width(plot_draw_area))
-
+	assert plot_box_state.drag_state.is_Dragging()
 	
+	time_range = plot_box_state.plot_state.time_range
+	# if plot_box_state.drag_state.is_NotDragging():
+	# 	return time_range
+
+	if drag_delta == (0., 0.):
+		return time_range
+
 
 	time_between_samples = signal.sampling_interval
 	max_t = (len(signal.data)-1) * time_between_samples	
 	
-	time_range = plot_box_state.plot_state.time_range
-
-
-	top_left, bottom_right = plot_draw_area
+	width_px  = int(rect_width(plot_draw_area))
 	# height_px = int(rect_height(plot_draw_area))
-	left_x = top_left.x
-	# right_x = bottom_right.x
+	left_x = plot_draw_area.top_left.x
+	# right_x = plot_draw_area.bottom_right.x
 
 
 	# sanity check before handling input
@@ -375,68 +385,53 @@ def plot_react_to_drag(plot_box_state: PlotState,
 										        .format(__start_t, __end_t, 0., max_t)
 
 
-	drag_origin = point_subtract_offset(get_mouse_position(), im.get_mouse_drag_delta())
-
-	updated_time_range = time_range  # if no drag or < > button input
-
-
-	# DRAGGING
-
-	if plot_box_state.drag_state.is_Dragging():
-
-		time_range_before_drag = plot_box_state .drag_state .time_range_before_drag
-		mouse_drag_delta = im.get_mouse_drag_delta()
-
-		updated_time_range = time_range_before_drag
+	time_range_before_drag = plot_box_state .drag_state .time_range_before_drag
+	updated_time_range = time_range_before_drag
 
 
-		# ZOOMING
+	# ZOOMING
 
-		min_time_range_length = 2*time_between_samples # so there's always at least one point visible
+	min_time_range_length = 2*time_between_samples # so there's always at least one point visible
 
-		# zoom_factor_per_100px = 1.1
-		# zoom_factor_per_1px   = 1 + ((zoom_factor_per_100px-1) / 100)
+	# zoom_factor_per_100px = 1.1
+	# zoom_factor_per_1px   = 1 + ((zoom_factor_per_100px-1) / 100)
 
-		x_delta = mouse_drag_delta.x
-		y_delta = mouse_drag_delta.y
+	x_delta = drag_delta.x
+	y_delta = drag_delta.y
 
-		do_zoom   = True
-		do_scroll = True
-
-
-		if do_zoom and y_delta != 0.:
-			factor = (math.exp(-y_delta / 100))
-			# 
-			assert left_x <= drag_origin.x
-			viewed_data_dur_before_drag = time_range_before_drag.end_t - time_range_before_drag.start_t
-			time_per_1px_before_drag  = viewed_data_dur_before_drag / width_px
-
-			origin_x_offset = drag_origin.x - left_x
-			origin_t_offset = origin_x_offset * time_per_1px_before_drag
-			origin_t = time_range_before_drag.start_t + origin_t_offset
-
-			updated_time_range = scale_at_point_limited(time_range_before_drag, factor, origin_t, 
-											min_len=min_time_range_length,
-											min_t=0., max_t=max_t)
-
-		# SCROLLING
-		viewed_data_dur = updated_time_range.end_t - updated_time_range.start_t
-		time_per_1px  = viewed_data_dur / width_px  # to know how much 1px of drag should move the time range
-
-		if do_scroll and x_delta != 0.:
-			updated_time_range = time_range_subtract_offset(
-						           		updated_time_range,
-						          		x_delta * time_per_1px )
-			# ^ mouse moves left -> start_t moves right, so we subtract
+	do_zoom   = True
+	do_scroll = True
 
 
-		updated_time_range = clamp_time_range(0., updated_time_range, max_t)
+	if do_zoom and y_delta != 0.:
+		factor = (math.exp(-y_delta / 100))
+		# 
+		assert left_x <= drag_origin.x
+		viewed_data_dur_before_drag = time_range_before_drag.end_t - time_range_before_drag.start_t
+		time_per_1px_before_drag  = viewed_data_dur_before_drag / width_px
+
+		origin_x_offset = drag_origin.x - left_x
+		origin_t_offset = origin_x_offset * time_per_1px_before_drag
+		origin_t = time_range_before_drag.start_t + origin_t_offset
+
+		updated_time_range = scale_at_point_limited(time_range_before_drag, factor, origin_t, 
+										min_len=min_time_range_length,
+										min_t=0., max_t=max_t)
+
+	# SCROLLING
+	viewed_data_dur = updated_time_range.end_t - updated_time_range.start_t
+	time_per_1px  = viewed_data_dur / width_px  # to know how much 1px of drag should move the time range
+
+	if do_scroll and x_delta != 0.:
+		updated_time_range = time_range_subtract_offset(
+					           		updated_time_range,
+					          		x_delta * time_per_1px )
+		# ^ mouse moves left -> start_t moves right, so we subtract
 
 
+	updated_time_range = clamp_time_range(0., updated_time_range, max_t)
 
-	# UPDATE THE TIME RANGE based on input
-	if plot_box_state.plot_state.time_range != updated_time_range:
-		emit( SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
+	return updated_time_range
 
 
 	# END OF HANDLING USER INPUT
