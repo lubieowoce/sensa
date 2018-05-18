@@ -9,7 +9,7 @@ import contextlib
 
 
 @contextlib.contextmanager
-def draggable(name: str, was_held: bool, width: float, height: float) -> Tuple[str, bool]:
+def draggable(name: str, was_down: bool, width: float, height: float) -> Tuple[str, bool]:
 	with child(name=name+"_frame", border=True,
 				width=width, height=height,
 				styles={im.STYLE_WINDOW_PADDING: (0,0)}):
@@ -17,20 +17,22 @@ def draggable(name: str, was_held: bool, width: float, height: float) -> Tuple[s
 
 		_ = im.invisible_button(name+"_invisible_button", width, height)
 		# _ = im.button("{},{}".format(width,height), width, height)
-		is_held = im.is_item_active()
+		is_down = im.is_item_active()
 		status = {
 			(False, False): 'idle',
 			(False, True) : 'pressed',
 			(True,  True) : 'held',
 			(True,  False): 'released',
-		}[(was_held, is_held)]
+		}[(was_down, is_down)]
 
 		im.set_cursor_screen_position(prev_cursor_screen_pos)
 
+		# The window takes no inputs, so it's okay that we 
+		# draw the button first - clicks just pass through the window
 		with child(name=name+"_content", flags=im.WINDOW_NO_INPUTS,
 					width=width, height=height,
 					styles={im.STYLE_WINDOW_PADDING: (0,0)}):
 
-			yield (status, is_held)
+			yield (status, is_down)
 			
 	return True

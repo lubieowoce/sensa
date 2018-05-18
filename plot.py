@@ -310,7 +310,7 @@ def signal_plot(plot_box_state: PlotState,
 	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
 	with draggable(name="signal_plot##"+str(plot_box_state.id_),
 					was_held=drag_state.is_Dragging(),
-					width=width, height=height) as (status, is_held):
+					width=width, height=height) as (status, is_down):
 
 		if status == 'pressed':
 			emit( StartDrag(id_=plot_box_state.id_) )
@@ -334,12 +334,15 @@ def signal_plot(plot_box_state: PlotState,
 				# without being reflected in the drag_state.
 				# In the latter case, If the mouse isn't dragging, drag_delta == (0,0)
 				# So effectively, the state is set as if the mouse never moved.
+				assert plot_box_state .drag_state .is_Dragging()
+
 				drag_delta = im.get_mouse_drag_delta(button=0, lock_threshold=1.)
 				drag_origin = point_subtract_offset(get_mouse_position(), drag_delta)
 				
 				updated_time_range = time_range_after_drag(
-										plot_box_state, signal, plot_draw_area,
-										drag_origin, drag_delta
+										plot_box_state .drag_state .time_range_before_drag,
+										signal,
+										plot_draw_area, drag_origin, drag_delta
 									 )
 				if plot_box_state .plot_state .time_range != updated_time_range:
 					emit( SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
@@ -352,21 +355,16 @@ def signal_plot(plot_box_state: PlotState,
 # TODO: Switch it to a pure function that just
 # computes the new time range based on mouse position
 def time_range_after_drag(
-		plot_box_state: PlotState,
+		time_range_before_drag: TimeRange,
 		signal: Signal,
 		plot_draw_area: Rect,
 		drag_origin,
-		drag_delta
+		drag_delta,
 		) -> TimeRange:
 
-	assert plot_box_state.drag_state.is_Dragging()
 	
-	time_range = plot_box_state.plot_state.time_range
-	# if plot_box_state.drag_state.is_NotDragging():
-	# 	return time_range
-
 	if drag_delta == (0., 0.):
-		return time_range
+		return time_range_before_drag
 
 
 	time_between_samples = signal.sampling_interval
@@ -378,19 +376,17 @@ def time_range_after_drag(
 	# right_x = plot_draw_area.bottom_right.x
 
 
-	# sanity check before handling input
-	# (underscores are so that these won't collide with the ones after handling inputs)
-	__start_t, __end_t = time_range
-	assert 0. <= __start_t < __end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
-										        .format(__start_t, __end_t, 0., max_t)
+	# # sanity check before handling input
+	# # (underscores are so that these won't collide with the ones after handling inputs)
+	# __start_t, __end_t = time_range
+	# assert 0. <= __start_t < __end_t <= max_t, "time range (<{}, {}>) out of bounds (<{}, {}>)" \
+	# 									        .format(__start_t, __end_t, 0., max_t)
 
 
-	time_range_before_drag = plot_box_state .drag_state .time_range_before_drag
 	updated_time_range = time_range_before_drag
 
 
 	# ZOOMING
-
 	min_time_range_length = 2*time_between_samples # so there's always at least one point visible
 
 	# zoom_factor_per_100px = 1.1
@@ -427,6 +423,7 @@ def time_range_after_drag(
 					           		updated_time_range,
 					          		x_delta * time_per_1px )
 		# ^ mouse moves left -> start_t moves right, so we subtract
+
 
 
 	updated_time_range = clamp_time_range(0., updated_time_range, max_t)

@@ -691,15 +691,16 @@ def draw() -> Eff(ACTIONS)[None]:
 	
 	with window(name="test"):
 			
-		with draggable("drag", ui.get("invisible_held", False),
-						width=-1, height=150) as (status, is_held):
+		with draggable("drag", ui.get("invisible_is_down", False),
+						width=-1, height=150) as (status, is_down):
 			im.text("drag me!")
-			im.text("{!r:<10}   {!r:<5}".format(status, is_held))
+			im.text("{!r:<10}   {!r:<5}".format(status, is_down))
 			im.button("shouldn't click")
 			im.text(repr(im.get_mouse_drag_delta()))
 
-		ui["invisible_held"] = is_held
-		im.text("{!r:<10}   {!r:<5}".format(status, is_held))
+		ui["invisible_is_down"] = is_down
+		im.text("{!r:<10}   {!r:<5}".format(status, is_down))
+
 
 	with window(name="signals"):
 		if im.button("load example"):
