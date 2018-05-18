@@ -309,7 +309,7 @@ def signal_plot(plot_box_state: PlotState,
 
 	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
 	with draggable(name="signal_plot##"+str(plot_box_state.id_),
-					was_held=drag_state.is_Dragging(),
+					was_down=drag_state.is_Dragging(),
 					width=width, height=height) as (status, is_down):
 
 		if status == 'pressed':
