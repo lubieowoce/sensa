@@ -51,7 +51,7 @@ from eff import (
 
 import sensa_util as util
 
-from imgui_widget import window, child
+from imgui_widget import window, child, color, only_draw_if
 from better_combo import str_combo
 from double_click_listbox import double_click_listbox
 # from double_click_selectable import double_click_selectable
@@ -169,16 +169,6 @@ def app_state_init():
 
 
 	assert state != None
-
-
-	# Demo
-	global SOURCE_BOX_ID, FILTER_BOX_1_ID, FILTER_BOX_2_ID, PLOT_1_ID, PLOT_2_ID
-	FILTER_BOX_1_ID = min(state.filter_boxes.keys())
-	FILTER_BOX_2_ID = max(state.filter_boxes.keys())
-	SOURCE_BOX_ID = min(state.source_boxes.keys())
-	PLOT_1_ID = min(state.plots.keys())
-	PLOT_2_ID = max(state.plots.keys())
-	# End Demo
 
 
 	user_action_history = deque()
@@ -347,19 +337,11 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 	    ),
 	    link_selection = LinkSelection.empty,
 		source_boxes = source_boxes,
-		plots = plots,
+		plots		 = plots,
 		filter_boxes = filter_boxes,
 
 		n_actions=0
 	)
-
-# Demo
-SOURCE_BOX_ID = None
-PLOT_1_ID = None
-PLOT_2_ID = None
-FILTER_BOX_1_ID = None
-FILTER_BOX_2_ID = None
-# End Demo
 
 # --------------------
 
@@ -693,8 +675,11 @@ def draw() -> Eff(ACTIONS)[None]:
 	# 	im.text('TL: '+str(top_left))
 	# 	im.text('BR: '+str(bottom_right))
 	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
-	
-	with window(name="test"):
+	debug_log("test_drew", False)
+	with window("test") as (expanded, _):
+		only_draw_if(expanded)
+
+		debug_log("test_drew", True) # only_draw_if didn't abort, overwrite 
 		US = ui['settings']
 
 		opts = ['first', 'second', 'third']
@@ -842,9 +827,9 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	prev_color_window_background = im.get_style().color(im.COLOR_WINDOW_BACKGROUND)
 
-	im.push_style_color(im.COLOR_WINDOW_BACKGROUND, 0., 0., 0., 0.05)
 	im.set_next_window_position(0, 100)
-	with window(name="nodes", 
+	with color({im.COLOR_WINDOW_BACKGROUND: (0., 0., 0., 0.05)}), \
+		 window(name="nodes", 
 				flags = (
 					  im.WINDOW_NO_TITLE_BAR
 					# | im.WINDOW_NO_MOVE
@@ -853,48 +838,40 @@ def draw() -> Eff(ACTIONS)[None]:
 					| im.WINDOW_NO_FOCUS_ON_APPEARING
 					| im.WINDOW_NO_BRING_TO_FRONT_ON_FOCUS
 				)
-				):
+		 ):
 		box_positions = {}
 		inputs = ng.get_inputs(state.graph, state.data.box_outputs)
 
 
-		im.push_style_color(im.COLOR_WINDOW_BACKGROUND, *prev_color_window_background)
+		with color({im.COLOR_WINDOW_BACKGROUND: prev_color_window_background}):
 
-		# source box
-		pos = signal_source_window(state.source_boxes[SOURCE_BOX_ID],
-							 state.data.signals,
-							 state.data.signal_names)
-		box_positions[SOURCE_BOX_ID] = pos
-
-
-		# signal plot 1
-		pos = signal_plot_window(state.plots[PLOT_1_ID],
-							inputs[PLOT_1_ID],
-							ui_settings=ui['settings'])
-		box_positions[PLOT_1_ID] = pos
+			# source boxes
+			for (id_, box_state) in state.source_boxes.items():
+				pos = signal_source_window(
+							box_state,
+							state.data.signals,
+							state.data.signal_names
+					  )
+				box_positions[id_] = pos
 
 
-		# filter box 1
-		pos = filter_box_window(state.filter_boxes[FILTER_BOX_1_ID],
-						  	ui_settings=ui_settings)
-		box_positions[FILTER_BOX_1_ID] = pos
+			# filter boxes
+			for (id_, box_state) in state.filter_boxes.items():
+				pos = filter_box_window(
+							box_state,
+							ui_settings=ui_settings
+					  )
+				box_positions[id_] = pos
+			
 
 
-		# filter box 2
-		pos = filter_box_window(state.filter_boxes[FILTER_BOX_2_ID],
-						  	ui_settings=ui_settings)
-		box_positions[FILTER_BOX_2_ID] = pos
-
-
-		# signal plot 2
-		pos = signal_plot_window(state.plots[PLOT_2_ID],
-							inputs[PLOT_2_ID],
-							ui_settings=ui['settings'])
-		box_positions[PLOT_2_ID] = pos
-
-		
-		im.pop_style_color()
-
+			# signal plot 1
+			for (id_, box_state) in state.plots.items():
+				pos = signal_plot_window(box_state,
+									inputs[id_],
+									ui_settings=ui_settings)
+				box_positions[id_] = pos
+			
 
 
 		# connections between boxes
@@ -903,49 +880,47 @@ def draw() -> Eff(ACTIONS)[None]:
 		prev_cursor_screen_pos = im.get_cursor_screen_position()
 
 		# get slot coords and draw slots
-		im.push_style_color(im.COLOR_CHECK_MARK, *(0, 0, 0, 100/255))
+		with color({im.COLOR_CHECK_MARK: (0, 0, 0, 100/255)}):
+			draw_list = im.get_window_draw_list()
+			SPACING = 20.
+			slot_center_positions = {}
 
-		draw_list = im.get_window_draw_list()
-		SPACING = 20.
-		slot_center_positions = {}
+			for (id_, position) in box_positions.items():
+				node = state.graph.nodes[id_]
 
-		for (id_, position) in box_positions.items():
-			node = state.graph.nodes[id_]
+				left_x = position.top_left.x
+				right_x = position.bottom_right.x
+				top_y = position.top_left.y
 
-			left_x = position.top_left.x
-			right_x = position.bottom_right.x
-			top_y = position.top_left.y
+				for slot_ix in range(node.n_inputs):
+					pos = im.Vec2(left_x-20-3, top_y+30+slot_ix*SPACING)
+					im.set_cursor_screen_position(pos)
 
-			for slot_ix in range(node.n_inputs):
-				pos = im.Vec2(left_x-20-3, top_y+30+slot_ix*SPACING)
-				im.set_cursor_screen_position(pos)
+					slot = ng.InputSlotId(id_, slot_ix)
+					was_selected = (slot == link_selection.dst_slot)
 
-				slot = ng.InputSlotId(id_, slot_ix)
-				was_selected = (slot == link_selection.dst_slot)
+					changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
+					if changed:
+						emit(ClickInput(slot))
 
-				changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
-				if changed:
-					emit(ClickInput(slot))
+					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+					slot_center_positions[('in', id_, slot_ix)] = center_pos
 
-				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
-				slot_center_positions[('in', id_, slot_ix)] = center_pos
+				for slot_ix in range(node.n_outputs):
+					pos = im.Vec2(right_x+3, top_y+30+slot_ix*SPACING)
+					im.set_cursor_screen_position(pos)
 
-			for slot_ix in range(node.n_outputs):
-				pos = im.Vec2(right_x+3, top_y+30+slot_ix*SPACING)
-				im.set_cursor_screen_position(pos)
+					slot = ng.OutputSlotId(id_, slot_ix)
+					was_selected = (slot == link_selection.src_slot)
 
-				slot = ng.OutputSlotId(id_, slot_ix)
-				was_selected = (slot == link_selection.src_slot)
+					changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
+					if changed:
+						emit(ClickOutput(slot))
 
-				changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
-				if changed:
-					emit(ClickOutput(slot))
+					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
+					slot_center_positions[('out', id_, slot_ix)] = center_pos
 
-				center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
-				slot_center_positions[('out', id_, slot_ix)] = center_pos
-
-		im.pop_style_color()
-		
+		# end drawing slots		
 
 
 
@@ -960,12 +935,10 @@ def draw() -> Eff(ACTIONS)[None]:
 		im.set_cursor_screen_position(prev_cursor_screen_pos)
 	# end nodes window
 
-	im.pop_style_color()
 
 
 	im.show_style_editor()
 
-	# debug_log_dict("first plot", state.plots[PLOT_1_ID].as_dict())
 
  	
 

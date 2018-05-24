@@ -1,7 +1,7 @@
 from typing import Tuple
 
 import imgui as im
-from imgui_widget import child
+from imgui_widget import child, style
 
 import contextlib
 
@@ -10,9 +10,10 @@ import contextlib
 
 @contextlib.contextmanager
 def draggable(name: str, was_down: bool, width: float, height: float) -> Tuple[str, bool]:
-	with child(name=name+"_frame", border=True,
-				width=width, height=height,
-				styles={im.STYLE_WINDOW_PADDING: (0,0)}):
+
+	with style({im.STYLE_WINDOW_PADDING: (0,0)}), \
+		 child(name=name+"_frame", border=True,
+			   width=width, height=height):
 		prev_cursor_screen_pos = im.get_cursor_screen_position()
 
 		_ = im.invisible_button(name+"_invisible_button", width, height)
@@ -29,9 +30,10 @@ def draggable(name: str, was_down: bool, width: float, height: float) -> Tuple[s
 
 		# The window takes no inputs, so it's okay that we 
 		# draw the button first - clicks just pass through the window
-		with child(name=name+"_content", flags=im.WINDOW_NO_INPUTS,
-					width=width, height=height,
-					styles={im.STYLE_WINDOW_PADDING: (0,0)}):
+
+		with style({im.STYLE_WINDOW_PADDING: (0,0)}), \
+			 child(name=name+"_content", flags=im.WINDOW_NO_INPUTS,
+					width=width, height=height):
 
 			yield (status, is_down)
 			
