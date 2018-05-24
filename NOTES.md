@@ -31,11 +31,43 @@ Happened for:
 - `signal` → fixed by rename to `eeg_signal`
 - `util`   → fixed by rename to `sensa_util`
 
+---
 
+## IMGui notes
+
+### When are clicks actually processed?
+
+That is, when does a button react to a click?
+
+> **Note**: *This is not 100% verified, but matches my experience and seems to make sense.*
+
+
+    --|--(C)--|---C---|---B---|-->
+      n       n+1     n+2
+      ^ frame n: actual click happens during frame n
+              ^ frame n+1: imgui 'sees' the click - imgui.is_mouse_clicked() -> True
+                      ^ frame n+2: button reacts to click, button("click me") -> True
+
+
+Code to see it:
+```python
+mouse  = imgui.is_mouse_clicked()
+button = imgui.button("click")
+imgui.text(
+	"button: {!r:<5}  mouse:{!r:<5} both:{!r:<5}"\
+		.format(mouse, button, mouse and button)
+)
+```
+
+Notice that `mouse` and `button` are never `True` at the same time.
+Mouse becomes true for a frame, and `button` the frame after.
+
+
+---
 
 ## IMGui quirks
 
-### imgui.text
+### `imgui.text`
 
 It seems like imgui.text truncates the displayed string to some length.
 This maximal length also depends on the number of newlines.

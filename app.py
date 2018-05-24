@@ -731,8 +731,6 @@ def draw() -> Eff(ACTIONS)[None]:
 		im.text("focused: "+ repr(im.is_window_focused()))
 
 
-		im.text("")
-
 
 
 
@@ -776,7 +774,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 		# im.same_line()
 		changed, option = str_combo(
-							"plot", ui_settings['plot_draw_function'],
+							"plots", ui_settings['plot_draw_function'],
 							['imgui',
 							 'manual']
 						  )
