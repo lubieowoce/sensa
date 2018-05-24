@@ -12,7 +12,7 @@ from typing import (
 
 # TODO: try converting Dict[str, Any] to TypedDict
 # 	http://mypy.readthedocs.io/en/latest/kinds_of_types.html#typeddict
-def read_edf(path: str) -> Tuple[ Dict[str, Any], Dict[str, Sequence[float]] ] :
+def read_edf(path: str, immutable=True) -> Tuple[ Dict[str, Any], Dict[str, Sequence[float]] ] :
 # def read_edf(path: str):
 	"""
 	Reads a .edf file.
@@ -73,7 +73,7 @@ def read_edf(path: str) -> Tuple[ Dict[str, Any], Dict[str, Sequence[float]] ] :
 	"""
 	data_file = open(path, 'rb')
 	header = read_header(data_file)
-	signals = read_signals(data_file, header)
+	signals = read_signals(data_file, header, immutable=immutable)
 	data_file.close()
 
 	for label in header['labels']: 
@@ -158,7 +158,7 @@ def read_header(data_file: BinaryIO) -> Dict[str, Any]:
 
 
 
-def read_signals(data_file: BinaryIO, hdr) -> Dict[str, Sequence[float]]:
+def read_signals(data_file: BinaryIO, hdr, immutable=True) -> Dict[str, Sequence[float]]:
 	"""Reads EEG signals from the EDF file."""
 
 	signals = {}
@@ -183,7 +183,8 @@ def read_signals(data_file: BinaryIO, hdr) -> Dict[str, Sequence[float]]:
 		signals[label] = scale(	hdr['signal_infos'][label]['physical_max'],
 								hdr['signal_infos'][label]['digital_max'],
 							  	np.array(signals[label].reshape(num_samples_in_record * num_records)))
-		signals[label].flags.writeable = False
+		if immutable:
+			signals[label].flags.writeable = False
 
 	return signals
 
