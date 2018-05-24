@@ -41,6 +41,8 @@ It seems like imgui.text truncates the displayed string to some length.
 This maximal length also depends on the number of newlines.
 We hit this limit when displaying the entire `state` dict as a single string (around 3000 chars in length) - only around 2900 characters were shown.
 
+Possible solution: consider using `imgui.text_unformatted`
+
 Repro:
 ```python
 from sensa_util import parts_of_len

@@ -8,7 +8,7 @@ from types_util import (
 )
 
 import imgui as im
-
+from sensa_util import is_sequence_unique
 
 
 def str_combo(name: str,
@@ -68,14 +68,6 @@ def str_combo_with_none(name: str,
 # 	return (changed, option_values[selected_ix])
 
 
-def is_sequence_unique(seq: Sequence[A]) -> bool:
-	seen = set()
-	for x in seq:
-		if x in seen:
-			return False
-		seen.add(x)
-	# ran through list without seeing same value twice	
-	return True
 
 
 def ordered_dict_to_list(odict: OrderedDict_[K, A]) -> Sequence[Tuple[K, A]]:

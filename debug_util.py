@@ -385,7 +385,7 @@ def indent_multiline_str(multiline_str: str, indent: int) -> str:
 
 
 
-def logged_times_to_durations(fresh_logged_times: OrderedDict_[Tuple[str, str], float]) -> Dict[str, Tuple[float, float]]:
+def logged_times_to_durations(fresh_logged_times: OrderedDict_[Tuple[str, str], float]) -> OrderedDict_[str, Tuple[float, float]]:
 	fresh_logged_range_names = set()
 	fresh_logged_range_names_ordered = []
 	for (range_name, _) in fresh_logged_times.keys():
