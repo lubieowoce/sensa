@@ -24,6 +24,7 @@ import imgui as im
 from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 from collections import deque
 import pickle
+# import numpy as np
 
 from typing import (
 	Any,
@@ -51,7 +52,10 @@ from eff import (
 import sensa_util as util
 
 from imgui_widget import window, child
-from draggable import draggable
+from better_combo import str_combo
+from double_click_listbox import double_click_listbox
+# from double_click_selectable import double_click_selectable
+# from draggable import draggable
 
 import persist
 
@@ -654,6 +658,7 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 # ----------------------------------------------------------
 
 
+
 @effectful(ACTIONS)
 def draw() -> Eff(ACTIONS)[None]:
 	emit = eff_operation('emit')
@@ -690,16 +695,45 @@ def draw() -> Eff(ACTIONS)[None]:
 	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
 	
 	with window(name="test"):
-			
-		with draggable("drag", ui.get("invisible_is_down", False),
-						width=-1, height=150) as (status, is_down):
-			im.text("drag me!")
-			im.text("{!r:<10}   {!r:<5}".format(status, is_down))
-			im.button("shouldn't click")
-			im.text(repr(im.get_mouse_drag_delta()))
+		US = ui['settings']
 
-		ui["invisible_is_down"] = is_down
-		im.text("{!r:<10}   {!r:<5}".format(status, is_down))
+		opts = ['first', 'second', 'third']
+		default_state = ('no_selection', None)
+
+		US.setdefault('selectable_state', default_state)
+		US.setdefault('selectable_added', [])
+		if not im.is_window_focused():
+			US['selectable_state'] = default_state
+
+		changed, selection_changed, selectable_state = double_click_listbox(US['selectable_state'], opts)
+		if changed:
+			US['selectable_state'] = selectable_state
+
+		o_ix = selectable_state[1]
+		im.text_colored(
+			"[ {!s:<10} ] {}".format(
+							opts[o_ix] if o_ix is not None else "---",
+							"(!)" if selection_changed else ""
+			 ),
+			*(0.3, 0.8, 0.5)
+		)
+		im.text("")
+		im.text("{!r:<5} {!r:<5} {}".format(changed, selection_changed, selectable_state) )
+
+		if selectable_state[0] == 'double_clicked':
+			US['selectable_added'].append(  opts[ selectable_state[1] ]  )
+		im.text(str(US['selectable_added']))
+
+
+		c  = im.is_mouse_clicked()
+		dc = im.is_mouse_double_clicked()
+		im.text( "{!r:<5} {!r:<5} {!r:<5}".format(c, dc, c and dc) )
+		im.text("focused: "+ repr(im.is_window_focused()))
+
+
+		im.text("")
+
+
 
 
 	with window(name="signals"):
