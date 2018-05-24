@@ -188,8 +188,8 @@ def app_state_init():
 	ui = {
 		'settings': {
 			'plot_window_movable': True,
-			'numpy_resample': False,
-			'scipy_resample': True,
+			'plot_resample_function': 'numpy_interp',
+			'plot_draw_function': 'imgui',
 
 			'filter_slider_power': 3.0,
 		},
@@ -730,15 +730,25 @@ def draw() -> Eff(ACTIONS)[None]:
 		if changed:
 			ui_settings['plot_window_movable'] = move
 
-		im.same_line()
-		changed, val = im.checkbox("numpy resample", ui_settings['numpy_resample'])
+		# im.same_line()
+		changed, option = str_combo(
+							"resample", ui_settings['plot_resample_function'],
+							['numpy_interp',
+							 'scipy_zoom',
+							 'crude_downsample']
+						  )
 		if changed:
-			ui_settings['numpy_resample'] = val
+			ui_settings['plot_resample_function'] = option
 
-		im.same_line()
-		changed, val = im.checkbox("scipy resample", ui_settings['scipy_resample'])
+		# im.same_line()
+		changed, option = str_combo(
+							"plot", ui_settings['plot_draw_function'],
+							['imgui',
+							 'manual']
+						  )
 		if changed:
-			ui_settings['scipy_resample'] = val
+			ui_settings['plot_draw_function'] = option
+
 
 		changed, val = im.slider_float('filter_slider_power', ui_settings['filter_slider_power'],
 									   min_value=1., max_value=5.,

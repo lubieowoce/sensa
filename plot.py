@@ -148,6 +148,7 @@ PlotBoxState.to_node   = to_node
 
 
 
+
 INITIAL_VIEW_SAMPLES_N = 800
 DEFAULT_TIME_RANGE = TimeRange(0.0, INITIAL_VIEW_SAMPLES_N/200.0)
 
@@ -163,7 +164,7 @@ def initial_plot_box_state() -> Eff(ID, ACTIONS)[PlotBoxState]:
 	state = PlotBoxState(
 				id_=id_,
 				# plot_state=NoTimeRange(),
-				plot_state=WithTimeRange(DEFAULT_TIME_RANGE),
+				plot_state=WithTimeRange(DEFAULT_TIME_RANGE), # TODO: not great...
 				drag_state=NotDragging()
 			)
 	emit(ng.AddNode(id_=id_, node=to_node(state)))
@@ -274,7 +275,6 @@ def signal_plot_window(
 	plot_name = "Plot (id={id})###{id}".format(id=plot_box_state.id_)
 
 	with window(name=plot_name, flags=PLOT_WINDOW_FLAGS):
-
 		plot_width = -1. # auto
 		plot_height = im.get_content_region_available().y - 20
 
@@ -286,12 +286,13 @@ def signal_plot_window(
 
 		if m_signal.is_Nothing():
 			im.text(" ")
-
 		elif m_signal.is_Just():
 			signal = m_signal.val
 			im.text_colored(str(signal), 0.8, 0.8, 0.8)
 
 		return get_window_rect()
+
+
 
 @effectful(ACTIONS)
 def signal_plot(plot_box_state: PlotState,
@@ -312,9 +313,9 @@ def signal_plot(plot_box_state: PlotState,
 					was_down=drag_state.is_Dragging(),
 					width=width, height=height) as (status, is_down):
 
-		if status == 'pressed':
+		if status == 'pressed': # and plot_box_state.plot_state.is_WithTimeRange():
 			emit( StartDrag(id_=plot_box_state.id_) )
-		elif status == 'released':
+		elif status == 'released': # and plot_box_state.plot_state.is_WithTimeRange():
 			emit( EndDrag(id_=plot_box_state.id_) )
 		# im.text("{!r:<10}   {!r:<5}".format(status, is_held))
 
@@ -323,10 +324,13 @@ def signal_plot(plot_box_state: PlotState,
 			im.text("Not ready")
 
 		elif m_signal.is_Just():
-			plot_draw_area = get_window_rect()
-			draw_list = im.get_window_draw_list()
 			signal = m_signal.val
-			show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
+			plot_draw_area = get_window_rect()
+			if ui_settings['plot_draw_function'] == 'manual':
+				draw_list = im.get_window_draw_list()
+				show_full_plot(plot_box_state, signal, plot_draw_area, draw_list, ui_settings)
+			else:
+				show_imgui_plot(plot_box_state, signal, width=-1, height=-1, ui_settings=ui_settings)
 
 			if status == 'held':
 				# Unfortunately, a StartDrag/EndDrag will only be processed after draw()
@@ -398,7 +402,6 @@ def time_range_after_drag(
 	do_zoom   = True
 	do_scroll = True
 
-
 	if do_zoom and y_delta != 0.:
 		factor = (math.exp(-y_delta / 100))
 		# 
@@ -437,7 +440,7 @@ def time_range_after_drag(
 
 
 
-def show_full_plot(plot_box_state: Dict[str, Any],
+def show_full_plot(plot_box_state: PlotState,
 				   signal: Signal,
 				   plot_draw_area: Rect,
 				   draw_list,
@@ -463,9 +466,6 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 	max_t = (len(signal.data)-1) * time_between_samples
 
 	
-
-
-	# INPUT HANDLING USED TO BE HERE
 
 	# debug_log_dict("plot", plot_state)
 	time_range = plot_box_state .plot_state .time_range
@@ -514,38 +514,13 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 
 
 
-	# get the signal data to plot
-
-	# if n_samples_in_range <= n_points_in_plot:
-	# 	data_part = signal.data[first_ix : last_ix+1] 
-	# else: # n_samples_in_range > n_points_in_plot:
-	# 	# there's more samples than pixels, so we do some very crude downsampling
-	# 	# ixs = n_indexes_from_range(first_ix, last_ix, n_points_in_plot)
-	# 	# data_part = signal.data[ixs]
-	# 	data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
 	debug_log_time(DATA_GET_START)
 
-	if n_samples_in_range > n_points_in_plot:
-		assert n_points_in_plot == width_px
-		if ui_settings['numpy_resample']:
-			point_times = np.linspace(start=0., stop=(len(signal.data)-1)*time_between_samples, num=len(signal.data)) 
-			sampled_times = np.linspace(start=start_t, stop=end_t, num=n_points_in_plot)
-			data_part = np.interp(x=sampled_times, xp=point_times, fp=signal.data)
-		elif ui_settings['scipy_resample']:
-			# apparently slower than np.interp for large inputs
-			data_part = scipy.ndimage.interpolation.zoom(
-							signal.data[first_ix: last_ix+1],
-							zoom=(n_points_in_plot/n_samples_in_range),
-							# order=5,
-							prefilter=True,
-						)[:n_points_in_plot]
-		else:
-			data_part = downsample(signal.data[first_ix : last_ix+1], n_points_in_plot)
-	else: # n_samples_in_range <= n_points_in_plot
-		assert n_points_in_plot == n_samples_in_range
-		data_part = signal.data[first_ix : last_ix+1] 
-
-	assert n_points_in_plot == len(data_part), "need: {}, got: {}".format(n_points_in_plot, len(data_part))
+	data_part = slice_signal(
+					signal, time_range,
+					n_points_needed=n_points_in_plot,
+					variant=ui_settings['plot_resample_function']
+				)
 
 	# map the data points to pixel heights
 
@@ -616,13 +591,10 @@ def show_full_plot(plot_box_state: Dict[str, Any],
 
 
 	debug_log_time(SIGNAL_PLOT_CALL_END)
-
-
-
 	# END
 
 
-def show_empty_plot(plot_state: Dict[str, Any], text: str, plot_draw_area: Rect, draw_list) -> IMGui[None]:
+def show_empty_plot(plot_state: PlotState, text: str, plot_draw_area: Rect, draw_list) -> IMGui[None]:
 	# assert plot_state.is_Empty()
 	# BOX AROUND PLOT
 	gray = (0.8, 0.8, 0.8, 1)
@@ -631,6 +603,84 @@ def show_empty_plot(plot_state: Dict[str, Any], text: str, plot_draw_area: Rect,
 
 
 
+def show_imgui_plot(
+	plot_box_state: PlotState,
+	signal: Signal,
+	width: int = -1,
+	height: int = -1,
+	ui_settings = {},
+	) -> IMGui[None]:
+
+	debug_log_time(SIGNAL_PLOT_CALL_START)
+	
+	time_range = plot_box_state .plot_state .time_range
+
+	if width  == -1:
+		width  = int(im.get_content_region_available().x)
+	if height == -1:
+		height = int(im.get_content_region_available().y)
+
+	debug_log_time(DATA_GET_START)
+	data_part = slice_signal(
+					signal,
+					time_range,
+					n_points_needed=width,
+					variant=ui_settings['plot_resample_function']
+				).astype(np.dtype('float32'))
+	debug_log_time(DATA_GET_END)
+
+	debug_log_time(WAVE_DRAW_START)
+	im.plot_lines(
+		"the_actual_plot##{}".format(plot_box_state.id_),
+		values=data_part,
+		graph_size=(width,height),
+		scale_min=signal.physical_min,
+		scale_max=signal.physical_max,
+	)
+	debug_log_time(WAVE_DRAW_END)
+
+
+	debug_log_time(SIGNAL_PLOT_CALL_END)
+
+
+
+def slice_signal(signal: Signal, time_range: TimeRange, n_points_needed: int, variant='numpy_resample') -> NDArray[float]:
+	time_between_samples = signal.sampling_interval
+	start_t, end_t = time_range
+
+	# get the indexes of the signal data to plot
+
+	first_ix = math.ceil(start_t / time_between_samples)    # first sample after start_t
+	last_ix  = math.floor(end_t / time_between_samples)      # last sample before end_t
+	#                                                       (so we can draw a line to it even though it's not visible yet)
+	assert 0 <= first_ix < last_ix <= len(signal.data)-1, "indexes <{},{}> out of bounds of data <{},{}>" \
+														   .format(first_ix, last_ix, 0, len(signal.data)-1)
+	n_samples_in_range  = last_ix+1 - first_ix
+
+	data_part = None
+	if n_samples_in_range > n_points_needed:
+		if variant == 'numpy_interp':
+			point_times = np.linspace(start=0., stop=(len(signal.data)-1)*time_between_samples, num=len(signal.data)) 
+			sampled_times = np.linspace(start=start_t, stop=end_t, num=n_points_needed)
+			data_part = np.interp(x=sampled_times, xp=point_times, fp=signal.data)
+
+		elif variant == 'scipy_zoom':
+			# apparently slower than np.interp for large inputs
+			data_part = scipy.ndimage.interpolation.zoom(
+							signal.data[first_ix: last_ix+1],
+							zoom=(n_points_needed/n_samples_in_range),
+							# order=5,
+							prefilter=True,
+						)[:n_points_needed]
+		else:
+			data_part = downsample(signal.data[first_ix : last_ix+1], n_points_needed)
+
+	else: # n_samples_in_range <= n_points_needed
+		assert n_samples_in_range <= n_points_needed
+		data_part = signal.data[first_ix : last_ix+1]
+
+	assert len(data_part) <= n_points_needed, "need at most {} points, got {}".format(n_points_needed, len(data_part))
+	return data_part
 
 
 
