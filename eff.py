@@ -3,7 +3,7 @@ from typing import (
 	Tuple, List, Dict,
 	Generic,
 )
-from types_util import (
+from sensa_util.types import (
 	Id, SignalId,
 	A,
 	Fun, 

@@ -32,7 +32,7 @@ from typing import (
 )
 
 
-from types_util import (
+from sensa_util.types import (
 	PMap_,
 	Action, Effect,
 	IO_,

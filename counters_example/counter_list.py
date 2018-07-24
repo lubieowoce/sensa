@@ -1,6 +1,6 @@
 from sensa_util import (err_unsupported_action)
 
-from types_util import (
+from sensa_util.types import (
 	Any,
 	PMap_,
 	Action,

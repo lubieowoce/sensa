@@ -6,7 +6,7 @@ from typing import (
 	Any, Tuple,
 	List, Dict, Union,
 )
-from types_util import (
+from sensa_util.types import (
 	PMap_, # PVector_,
 	Id, SignalId,
 	NDArray,

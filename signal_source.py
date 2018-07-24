@@ -2,7 +2,7 @@ import typing
 from typing import (
 	Any, List, Dict, Optional, Union, 
 )
-from types_util import (
+from sensa_util.types import (
 	Id, SignalId,
 	PMap_,
 	Fun, IO_, IMGui, 

@@ -12,7 +12,7 @@ from typing import (
 	Any, 
 	Dict, Sequence, Optional, Tuple, Deque, List,
 )
-from types_util import (
+from sensa_util.types import (
 	A,
 	OrderedDict_,
 	Fun, 

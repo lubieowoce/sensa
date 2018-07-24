@@ -2,7 +2,7 @@ from typing import (
 	Any,
 	Dict, Sequence, List,
 )
-from types_util import (
+from sensa_util.types import (
 	PMap_,
 )
 

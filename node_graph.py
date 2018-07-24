@@ -1,6 +1,6 @@
 from typing import Any, Set, List, Dict, NamedTuple
 
-from types_util import (
+from sensa_util.types import (
 	Id, SignalId,
 	PMap_,
 )

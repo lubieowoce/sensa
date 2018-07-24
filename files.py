@@ -3,7 +3,7 @@ from typing import (
 	Any,
 	Tuple, Dict,
 )
-from types_util import (
+from sensa_util.types import (
 	PMap_,
 	IO_,
 )
@@ -15,7 +15,7 @@ from eff import (
 	EFFECTS, SIGNAL_ID, ACTIONS,
 	eff_operation,
 )
-from types_util import (
+from sensa_util.types import (
 	SignalId,
 )
 

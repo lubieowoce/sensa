@@ -1,7 +1,7 @@
 from typing import (
 	Sequence, Tuple,  Optional
 )
-from types_util import (
+from sensa_util.types import (
 	K, A,
 	OrderedDict_,
 	IMGui,

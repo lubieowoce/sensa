@@ -3,7 +3,7 @@ from typing import (
 	Any,
 	Dict, Optional, List, Union
 )
-from types_util import (
+from sensa_util.types import (
 	Id, SignalId,
 	PMap_,
 	Fun, IO_, IMGui, 
