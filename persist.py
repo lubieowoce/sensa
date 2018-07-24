@@ -4,7 +4,7 @@ for persisting state to disk and loading it back.
 """
 
 from typing import (Iterable, Iterator, Any)
-from sensa_util.types import (IO_)
+from utils.types import (IO_)
 
 import pickle
 

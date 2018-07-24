@@ -29,7 +29,7 @@ Look at `pipenv`'s debug trace - you'll probably see that it tried to import a m
 
 Happened for:
 - `signal` → fixed by rename to `eeg_signal`
-- `util`   → fixed by rename to `sensa_util`
+- `util`   → fixed by rename to `utils`
 
 ---
 
@@ -77,7 +77,7 @@ Possible solution: consider using `imgui.text_unformatted`
 
 Repro:
 ```python
-from sensa_util import parts_of_len
+from utils import parts_of_len
 
 with window(name="test"):
 	text_len = ui.get('text_len', 3000)

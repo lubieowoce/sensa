@@ -1,5 +1,5 @@
 from functools import partial as part
-from sensa_util import chain as ch
+from utils import chain as ch
 
 from importlib import reload as rl
 from pprint import pprint as pp

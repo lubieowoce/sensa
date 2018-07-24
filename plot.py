@@ -6,7 +6,7 @@ from typing import (
 	Any, Tuple,
 	List, Dict, Union,
 )
-from sensa_util.types import (
+from utils.types import (
 	PMap_, # PVector_,
 	Id, SignalId,
 	NDArray,
@@ -21,7 +21,7 @@ from debug_util import (
 	Range
 )
 
-from sensa_util import (
+from utils import (
 	point_offset, point_subtract_offset,
 	# limit_lower,
 	limit_upper,

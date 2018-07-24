@@ -3,13 +3,13 @@ from typing import (
 	Tuple, List, Dict,
 	Generic,
 )
-from sensa_util.types import (
+from utils.types import (
 	Id, SignalId,
 	A,
 	Fun, 
 )
 import functools
-from sensa_util import identity
+from utils import identity
 
 import flags
 

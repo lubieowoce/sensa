@@ -3,7 +3,7 @@ from typing import (
 	Any,
 	Dict, Optional, List, Union
 )
-from sensa_util.types import (
+from utils.types import (
 	Id, SignalId,
 	PMap_,
 	Fun, IO_, IMGui, 
@@ -14,8 +14,8 @@ import imgui as im
 
 from uniontype import union
 
-from sensa_util import (chain, impossible, bad_action, Maybe, Nothing, Just)
-import sensa_util as util
+from utils import (chain, impossible, bad_action, Maybe, Nothing, Just)
+import utils as util
 
 from eff import (
 	Eff, effectful,

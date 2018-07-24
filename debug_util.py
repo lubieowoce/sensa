@@ -12,7 +12,7 @@ from typing import (
 	Any, 
 	Dict, Sequence, Optional, Tuple, Deque, List,
 )
-from sensa_util.types import (
+from utils.types import (
 	A,
 	OrderedDict_,
 	Fun, 
@@ -21,7 +21,7 @@ from sensa_util.types import (
 
 from imgui_widget import window #, group, child
 
-from sensa_util import (
+from utils import (
 	uniform_dict_type, uniform_sequence_type, is_sequence_uniform,
 	dict_to_function,
 	get_mouse_position,

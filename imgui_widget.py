@@ -1,5 +1,5 @@
 from functools import partial
-from sensa_util.types import IMGui
+from utils.types import IMGui
 from typing import Any
 
 import imgui

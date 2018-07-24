@@ -32,7 +32,7 @@ from typing import (
 )
 
 
-from sensa_util.types import (
+from utils.types import (
 	PMap_,
 	Action, Effect,
 	IO_,
@@ -49,7 +49,7 @@ from eff import (
 	get_signal_ids,
 )
 
-import sensa_util as util
+import utils as util
 
 from imgui_widget import window, child, color, only_draw_if
 from better_combo import str_combo

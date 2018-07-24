@@ -1,13 +1,13 @@
-# from sensa_util import (err_unsupported_action)
+# from utils import (err_unsupported_action)
 from typing import (
 	Any,
 	Tuple, Dict,
 )
-from sensa_util.types import (
+from utils.types import (
 	PMap_,
 	IO_,
 )
-from sensa_util import impossible
+from utils import impossible
 from uniontype import union
 
 from eff import (
@@ -15,7 +15,7 @@ from eff import (
 	EFFECTS, SIGNAL_ID, ACTIONS,
 	eff_operation,
 )
-from sensa_util.types import (
+from utils.types import (
 	SignalId,
 )
 

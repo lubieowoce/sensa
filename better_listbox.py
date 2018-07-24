@@ -1,11 +1,11 @@
 from typing import Tuple, Sequence
-from sensa_util.types import (
+from utils.types import (
 	# OrderedDict_,
 	IMGui,
 )
 
 import imgui as im
-from sensa_util import is_sequence_unique
+from utils import is_sequence_unique
 
 # from collections import OrderedDict
 

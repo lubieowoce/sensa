@@ -1,10 +1,10 @@
-from sensa_util.types import (
+from utils.types import (
 	Action, WidgetState
 )
 
 from pyrsistent import m
 
-from sensa_util import err_unsupported_action
+from utils import err_unsupported_action
 
 INCREMENT = "INCREMENT"
 DECREMENT = "DECREMENT"

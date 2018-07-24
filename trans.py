@@ -2,13 +2,13 @@ from typing import (
 	Any,
 	Dict, Sequence, List,
 )
-from sensa_util.types import (
+from utils.types import (
 	PMap_,
 )
 
 from eeg_signal import Signal
 
-from sensa_util import chain
+from utils import chain
 
 
 class Trans():

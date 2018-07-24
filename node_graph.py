@@ -1,6 +1,6 @@
 from typing import Any, Set, List, Dict, NamedTuple
 
-from sensa_util.types import (
+from utils.types import (
 	Id, SignalId,
 	PMap_,
 )
@@ -9,7 +9,7 @@ from uniontype import union
 from pyrsistent import s, m, pmap, pvector
 
 from functools import reduce
-from sensa_util import invert, impossible, Maybe, Nothing, Just, assert_all
+from utils import invert, impossible, Maybe, Nothing, Just, assert_all
 from eeg_signal import Signal
 # Source, Trans, Sink?
 
@@ -408,5 +408,5 @@ def handle_graph_effect(graph, source_signals, boxes, command: GraphEffect):
 
 
 # repl
-from sensa_util import chain as ch
+from utils import chain as ch
 pg = ch(graph_repr, print)

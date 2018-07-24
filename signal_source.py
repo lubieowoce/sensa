@@ -2,13 +2,13 @@ import typing
 from typing import (
 	Any, List, Dict, Optional, Union, 
 )
-from sensa_util.types import (
+from utils.types import (
 	Id, SignalId,
 	PMap_,
 	Fun, IO_, IMGui, 
 )
-from sensa_util import impossible, Maybe, Nothing, Just
-import sensa_util as util
+from utils import impossible, Maybe, Nothing, Just
+import utils as util
 
 from eff import (
 	Eff, effectful,

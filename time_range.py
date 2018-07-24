@@ -1,5 +1,5 @@
 from collections import namedtuple
-from sensa_util import (limit_lower)
+from utils import (limit_lower)
 TimeRange = namedtuple("TimeRange", ["start_t", "end_t"])
 
 
