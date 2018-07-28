@@ -522,7 +522,6 @@ def show_full_plot(plot_box_state: PlotState,
 					variant=ui_settings['plot_resample_function']
 				)
 
-	# map the data points to pixel heights
 
 	amplitude = max(abs(signal.physical_max), abs(signal.physical_min))
 	# TODO:  # PERF-IMPROVEMENT: the following could be fused into one operation
@@ -565,17 +564,45 @@ def show_full_plot(plot_box_state: PlotState,
 	first_point_x_offset = first_point_offset_t * px_per_1second
 	first_point_x = left_x + first_point_x_offset
 
-
+	transparent = (0., 0., 0., 0.01)
 	grue = (0.2, 0.7, 0.8, 1)
+	# made local for perf - shaves off 0.5 ms
+	add_line = draw_list.add_line
+
+
 	debug_log_time(WAVE_DRAW_START)
+
+	# Reuse the same point object every iteration
+	# to avoid allocations
+	# (We're basically using these as mutable tuples)
+	point1 = [0., 0.]
+	point2 = [0., 0.]
+	# add up to about ~1.5 ms 
+
+	# surprisingly, faster than a while loop
 	for i in range(0, len(ys)-1): # the last one doesn't have a next point to draw a line to, hence the -1
-		# x1 = left_x + i*px_per_1point
-		# x2 = left_x + (i+1)*px_per_1point
 		x1 = first_point_x + i*px_per_1point
 		x2 = first_point_x + (i+1)*px_per_1point
-		point1 = Vec2(x1, ys[i])
-		point2 = Vec2(x2, ys[i+1])
-		draw_list.add_line(point1, point2, color=grue, thickness=2.0)
+
+		y1 = ys[i]
+		y2 = ys[i+1]
+
+		# point1 = Vec2_(x1, y1)
+		# point2 = Vec2_(x2, y2)
+		# # creating these every time adds up to ~5ms
+		# # and imgui makes a copy anyway;
+		# # exposing something that took a cimgui.ImVec2
+		# # and reusing the same one every time 
+		# # would speed it up considerably
+
+		point1[0] = x1; point1[1] = y1
+		point2[0] = x2; point2[1] = y2
+
+		add_line(point1, point2, color=grue, thickness=2.0)
+		# calls to `add_line` add up to ~3ms
+
+
+
 
 	debug_log_time(WAVE_DRAW_END)
 

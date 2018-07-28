@@ -98,3 +98,10 @@ with window(name="test"):
 						   )  )
 ```
 Note how new letters stop appearing after `text_len` crosses some treshhold, and that this treshhold depends on `row_len` too.
+
+---
+
+### PyOpenGL
+
+Worth checking out: [PyOpenGL_accelerate](https://pypi.org/project/PyOpenGL-accelerate/)
+May be useful.

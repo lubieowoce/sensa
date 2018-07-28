@@ -100,7 +100,6 @@ import flags
 
 
 
-
 INITIAL_ACTIONS = [FileAction.Load(filename=example_file_path)]
 
 STATE_SAVEFILE_NAME               = 'sensa_state.pickle'
@@ -182,7 +181,8 @@ def app_state_init():
 		'settings': {
 			'plot_window_movable': True,
 			'plot_resample_function': 'numpy_interp',
-			'plot_draw_function': 'imgui',
+			# 'plot_draw_function': 'imgui',
+			'plot_draw_function': 'manual',
 
 			'filter_slider_power': 3.0,
 		},
@@ -826,7 +826,25 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 
-
+	# TODO: Window positions can theoretically be accessed after drawing them using the internal API.
+	# See:
+	#	imgui_internal.h > ImGuiWindow (search "struct IMGUI_API ImGuiWindow")
+	#	imgui.cpp        > ImGui::GetCurrentContext()
+	#
+	# (sort-of pseudocode example)
+	#
+	# foo_id = None
+	#
+	# with window("foo"):
+	# 	foo_id = GetCurrentWindow().ID
+	# 	...
+	#
+	# ...
+	#
+	# with window("accessing other windows"):
+	# 	windows = imgui.GetCurrentContext().Windows
+	# 	foo_win = windows[ windows.find(lambda win: win.ID = foo_id) ]
+	# 	im.text( "pos:{}, size:{}".format(foo_win.Pos, foo_win.Size) )
 
 
 	# ----------------------------
