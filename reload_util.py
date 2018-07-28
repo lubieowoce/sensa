@@ -2,6 +2,7 @@ from typing import (Set, Any, Iterable, TypeVar, Optional, Sequence)
 
 import inspect
 import importlib
+import builtins
 
 from pathlib import (Path)
 # import pathlib as p
@@ -16,7 +17,7 @@ A = TypeVar('A')
 Module = type(inspect) # <class 'module'>  # any module would work here
 
 
-def recursive_reload(module: Module, dir: Path, excluded: Sequence[str] = ()) -> None:
+def recursive_reload(module: Module, dir: Path, excluded: Sequence[str] = (), verbose=False, inject_versions=False) -> None:
 	"""
 	Reload `module`, its dependencies, their dependencies, etc.
 	Dependencies are reloaded first to ensure every module gets the right version.
@@ -35,21 +36,42 @@ def recursive_reload(module: Module, dir: Path, excluded: Sequence[str] = ()) ->
 	if you have a heavy module that never changes, but be careful -
 	if you modify the module during runtime, the app won't see the changes. 
 	"""
-
+	excluded = excluded + (__name__,)
 	done = set()
 
-	def rec_rel(mod) -> None:
+	def rec_rel(mod, current_depth=0) -> None:
+		if verbose:
+			indent = current_depth*'\t'
+			print(indent + mod.__name__ + ("(won't reload)" if mod.__name__ in excluded else ""), flush=True)
+
 		deps = direct_deps(mod, dir=dir)
 		# first, recursively reload the dependencies
 		for dep in deps:
 			if dep not in done:
-				rec_rel(dep)
+				rec_rel(dep, current_depth=current_depth+1)
+
+			elif verbose: print(indent+'\t' + dep.__name__ + " (already reloaded)", flush=True)
+
 		# then reload the module
 		if mod.__name__ not in excluded:
+			# tag the classes and routines in the module object with its version
+			# (helps find reload-related bugs)
+			if inject_versions:
+				mod_reload_incarnation = getattr(mod, '__reload_incarnation__', 0)
+				members = dict(inspect.getmembers(mod))
+				for (name, obj) in members.items():
+					if (not inspect.isbuiltin(obj)) and (inspect.isclass(obj) or inspect.isroutine(obj)) and obj.__module__ == mod.__name__:
+						setattr(obj, '__reload_incarnation__', mod_reload_incarnation)
+
 			importlib.reload(mod)
+
+			if inject_versions: setattr(mod, '__reload_incarnation__', mod_reload_incarnation+1)
+
 		done.add(mod)
 
 	rec_rel(module)
+
+	# print('Reloaded:', *('\t'+mod.__name__ for mod in done), sep='\n', flush=True)
 
 
 # # Graph stuff - might be unnecessary
@@ -87,7 +109,7 @@ def recursive_reload(module: Module, dir: Path, excluded: Sequence[str] = ()) ->
 def direct_deps(module: Module, dir: Path = None) -> Set[Module]:
 	"""
 	Returns the set of the direct dependencies of the module,
-	i.e. modules it imports. If directory is specified, only modules
+	i.e. modules it imports. If a directory is specified, only modules
 	in that directory (and its children) will be returned.
 	"""
 	assert inspect.ismodule(module)
@@ -139,16 +161,18 @@ def module_dirpath(module: Module) -> Optional[Path]: return module_abspath(modu
 
 
 def module_abspath(module: Module) -> Optional[Path]:
-	assert inspect.ismodule(module)
+	assert inspect.ismodule(module), repr(module)
 
 	try:   return Path(inspect.getfile(module))
 	except TypeError: return None # builtin module
+
 
 
 def current_module_dirpath() -> Path:
 	""" Returns the dirpath of the file it was called from. """
 	parent_frame = inspect.stack()[1].frame
 	return Path(inspect.getfile(parent_frame)).parent
+
 
 
 def current_module_abspath() -> Path:
@@ -183,3 +207,20 @@ def catf(f, *exs):
 		except exs: return None
 
 	return safe_f
+
+
+import sys
+
+def all_modules(dir=None):
+	modules_iter = filter(inspect.ismodule, sys.modules.values())
+	# It's really weird that things that aren't modules can go in sys.modules, but they can... (see `typing.re`, a class)
+
+	if dir is not None:
+		dirpath = dir
+		assert dirpath.is_absolute()
+		assert dirpath.exists()
+		assert dirpath.is_dir()
+
+		return set(mod for mod in modules_iter if is_module_in_dir(mod, dirpath))
+	else:
+		return set(modules_iter)

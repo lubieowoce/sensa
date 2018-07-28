@@ -8,9 +8,9 @@ from .types import (
 
 A = TypeVar('A')
 
-def assert_all(xs: Sequence[A], pred: Fun[[A], bool], msg: str = "{}"):
-	for x in xs:
-		assert pred(x), msg.format(x)
+def assert_all(xs: Sequence[A], pred: Fun[[A], bool], msg: str = "predicate {pred} failed for item {i} of {len} - {val}"):
+	for (i, x) in enumerate(xs):
+		assert pred(x), msg.format(pred=pred.__name__, i=i, len=len(xs), val=x)
 		
 # def all_satisfy(xs: Sequence[A], pred: Fun[[A], bool]) -> bool:
 # 	return all()

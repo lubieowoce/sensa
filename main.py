@@ -13,5 +13,4 @@ from imgui_glfw import run_reloadable_imgui_app
 if __name__ == "__main__":
 	run_reloadable_imgui_app(
 		app_module=app,
-		no_reload=('imgui_glfw', 'main', 'reload_util')
 	)

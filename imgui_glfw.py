@@ -31,11 +31,13 @@ def DEFAULT_DRAW():
 
 def run_reloadable_imgui_app(app_module, no_reload=()):
 
+	no_reload = no_reload + (__name__,)
 	settings = getattr(app_module, '__settings__', {})
 
 	window_title        = settings.get('window_title',         DEFAULT_WINDOW_TITLE)
 	initial_window_size = settings.get('initital_window_size', DEFAULT_WINDOW_SIZE)
 	target_framerate    = settings.get('target_framerate',     DEFAULT_TARGET_FRAMERATE)
+	num_active_frames_after_input = 2*target_framerate # arbitrary
 
 	window = impl_glfw_init(window_title=window_title, window_size=initial_window_size)
 	renderer = GlfwRenderer(window)
@@ -53,6 +55,9 @@ def run_reloadable_imgui_app(app_module, no_reload=()):
 	prev_mouse_down_0 = False
 	prev_frame_click_0_finished = False
 
+	frames_since_last_input = 0
+
+	# TODO:
 	def got_input() -> bool:
 		"""
 		Checks if the user sent any left-mouse mouse inputs, like moving/clicking the mouse
@@ -99,8 +104,12 @@ def run_reloadable_imgui_app(app_module, no_reload=()):
 			glfw.poll_events()
 			renderer.process_inputs()
 
-			got_inp = got_input()
-			if got_inp:
+			if got_input():
+				frames_since_last_input = 0
+			else:
+				frames_since_last_input += 1
+
+			if frames_since_last_input <= num_active_frames_after_input:
 
 				imgui.new_frame()
 
@@ -144,8 +153,6 @@ def run_reloadable_imgui_app(app_module, no_reload=()):
 			break # end the reload loop, run user shutdown, close
 		elif m_request == 'reload':
 			rlu.recursive_reload(app_module, dir=rlu.module_dirpath(app_module), excluded=no_reload)
-			# TODO: recursively reload all dependencies of app module
-			#		(right now only the top-level app_module is reloaded)
 			setattr(app_module, '__was_reloaded__', True)
 			continue
 

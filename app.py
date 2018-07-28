@@ -31,7 +31,6 @@ from typing import (
 	NamedTuple, Optional, Union, Tuple
 )
 
-
 from utils.types import (
 	PMap_,
 	Action, Effect,
@@ -223,7 +222,7 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 		pass
 
 	elif msg.is_Crash():
-		debug_log_crash(origin=msg.origin, cause=msg.action, exception=msg.ex)
+		debug_log_crash(origin=msg.origin, cause=msg.cause, exception=msg.exception)
 
 	elif msg.is_DoApp():	
 		handle_app_state_effect(msg.command)
@@ -260,7 +259,9 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 
 	actions_to_process = user_actions[:]
 
+	# if actions_to_process: print('running actions:', flush=True)
 	for action in actions_to_process:
+		# print("\t{}".format(action), flush=True)
 		try:
 			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
 		except Exception as ex:
@@ -290,7 +291,7 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 			
 			current_signal_id = eff_res[SIGNAL_ID]
 
-
+	# if actions_to_process: print(flush=True)
 	return Success()
 
 
@@ -639,7 +640,8 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 
 # ----------------------------------------------------------
 
-
+import reload_util as rlu
+import pathlib
 
 @effectful(ACTIONS)
 def draw() -> Eff(ACTIONS)[None]:
@@ -740,6 +742,12 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# -------------------------
+	# with window(name="modules"):
+	# 	modules = sorted(rlu.all_modules(dir=pathlib.Path.cwd()), key=lambda mod: (getattr(mod, '__reload_incarnation__', -1), mod.__name__))
+	# 	for mod in modules:
+	# 		incarnation_text = str(getattr(mod, '__reload_incarnation__', '-'))
+	# 		im.text("{mod}[{inc}]".format(mod=mod.__name__, inc=incarnation_text))
+
 
 	with window(name="settings"):
 		ui_settings = ui['settings']

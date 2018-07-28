@@ -50,12 +50,38 @@ highpass_filter = part(simple_filter, type='high')
 highpass_tr = Trans('Highpass filter', highpass_filter, highpass_filter_sig)
 
 
-available_filters = OrderedDict([
+
+######################################################################
+# IMPORTANT - DON'T DELETE THESE CLASSES WITHOUT READING THE COMMENT #
+######################################################################
+
+class FiltersDict(OrderedDict): pass # SEE COMMENT BELOW
+class FilterDefaultParametersDict(dict): pass # SEE COMMENT BELOW
+
+# These two classes seem useless, BUT they serve an important purpose.
+# Allow me to describe a bug that using plain OrderedDicts/dicts caused.
+
+# module `A` did `from filters import available_filters`.
+# `available_filters` is an OrderedDict, defined in the stdlib, so
+# `inspect.getmodule(available_filters)` yields None.
+# Hence, the reloader couldn't see that `A` depended on `filters`,
+# and `filters` wasn't reloaded.
+# That in turn caused `filters` to use an outdated version of the Signal class -
+# the one from before the reload - so suddenly typechecks started failing
+# with puzzling messages like "expected Signal, got Signal".
+# I spent half a day tracking this bug down, so I thought I'd
+# prevent that from happening in the future. 
+
+# TODO: Make these classes unnecessary, i.e. figure out a way to
+# 		export this data sensibly
+
+
+available_filters = FiltersDict([
 	('highpass', highpass_tr),
 	('lowpass',  lowpass_tr),
 ])
 
-default_parameters = {
+default_parameters = FilterDefaultParametersDict({
 	'lowpass': lowpass_default_params,
 	'highpass': highpass_default_params,
-}
+})

@@ -134,7 +134,7 @@ def debug_window() -> IMGui[None]:
 				im.text('\n'+ str(exception.__cause__) if exception.__cause__ is not None else '')
 				for line in traceback.format_tb(exception.__traceback__):
 					im.text(line)
-				im.text(str.join(', ', map(str, exception.args) ))
+				im.text("{}: {}".format(type(exception).__qualname__, str.join(', ', map(repr, exception.args) )) )
 
 				if im.button('close'):
 					debug_dict['crash'] = None
