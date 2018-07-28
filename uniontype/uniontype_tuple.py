@@ -250,7 +250,7 @@ def union(
 
 				for (attr_name, attr_val) in val__._asdict().items():
 					specified_attr_type = specified_attr_types[attr_name]
-					if type(attr_val) != specified_attr_type:
+					if specified_attr_type is not object and specified_attr_type is not Any and not isinstance(attr_val, specified_attr_type):
 						raise TypeError(type_name+".{variant_name} constructor: attribute {attr_name} has specified type {specified_attr_type}, but is {arg}: {arg_type}" \
 										 .format(variant_name=variant_name, attr_name=repr(attr_name),
 												 specified_attr_type=specified_attr_type,
