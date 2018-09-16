@@ -73,50 +73,24 @@ from sumtype import sumtype
 
 
 
-DragState, \
-	NotDragging, \
-	Dragging, \
-= sumtype.with_constructors(
-'DragState', [
-	('NotDragging', []),
-	('Dragging', 	[('time_range_before_drag', TimeRange)]),
-]
-)
+class DragState(sumtype):
+	def NotDragging(): ...
+	def Dragging(time_range_before_drag: TimeRange): ...
 
-DragAction, \
-	StartDrag, \
-	EndDrag, \
-= sumtype.with_constructors(
-'DragAction', [
-	('StartDrag',	 [('id_', Id)]),
-	('EndDrag', 	 [('id_', Id)]),
-]
-)
+class DragAction(sumtype):
+	def StartDrag(id_: Id): ...
+	def EndDrag  (id_: Id): ...
 
 # --------------
 
-PlotState, \
-	NoTimeRange, \
-	WithTimeRange, \
-= sumtype.with_constructors(
-'PlotState', [
-	('NoTimeRange', [ ]),
-	('WithTimeRange', 	[('time_range', TimeRange)]),
-]
-)
+class PlotState(sumtype):
+	def NoTimeRange(): ...
+	def WithTimeRange(time_range: TimeRange): ...
 
 
-PlotAction, \
-	SetTimeRange, \
-	SetNoTimeRange,\
-= sumtype.with_constructors(
-'PlotAction', [
-	('SetTimeRange',   [('id_', Id),
-				 	    ('time_range', TimeRange)]), 
-
-	('SetNoTimeRange', [('id_', Id)]), 
-]
-)
+class PlotAction(sumtype):
+	def SetTimeRange  (id_: Id, time_range: TimeRange): ...
+	def SetNoTimeRange(id_: Id): ... 
 
 
 
@@ -163,11 +137,11 @@ def initial_plot_box_state() -> Eff(ID, ACTIONS)[PlotBoxState]:
 	id_ = get_id()
 	state = PlotBoxState(
 				id_=id_,
-				# plot_state=NoTimeRange(),
-				plot_state=WithTimeRange(DEFAULT_TIME_RANGE), # TODO: not great...
-				drag_state=NotDragging()
+				# plot_state=PlotState.NoTimeRange(),
+				plot_state=PlotState.WithTimeRange(DEFAULT_TIME_RANGE), # TODO: not great...
+				drag_state=DragState.NotDragging()
 			)
-	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state)))
 	return state
 
 
@@ -191,9 +165,9 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 
 	if type(action) == PlotAction:
 		if action.is_SetTimeRange():
-			new_state = plot_box_state._replace(plot_state=WithTimeRange(time_range=action.time_range))
+			new_state = plot_box_state._replace(plot_state=PlotState.WithTimeRange(time_range=action.time_range))
 		elif action.is_SetNoTimeRange():
-			new_state = plot_box_state._replace(plot_state=NoTimeRange())
+			new_state = plot_box_state._replace(plot_state=PlotState.NoTimeRange())
 		
 
 	elif type(action) == DragAction:
@@ -209,7 +183,7 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 				time_range = plot_box_state .plot_state .time_range
 
 				if drag_state.is_NotDragging():
-					new_state = plot_box_state._replace(drag_state=Dragging(time_range_before_drag=time_range))
+					new_state = plot_box_state._replace(drag_state=DragState.Dragging(time_range_before_drag=time_range))
 				elif drag_state.is_Dragging():
 					bad_action(msg="Is already dragging: cannot start dragging in state " + plot_box_state)
 
@@ -230,7 +204,7 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 					bad_action("Is already dragging: cannot start dragging in state " + plot_box_state)
 
 				elif drag_state.is_Dragging():
-					return plot_box_state._replace(drag_state=NotDragging())
+					return plot_box_state._replace(drag_state=DragState.NotDragging())
 
 			else:
 				impossible("Invalid plot state:" + plot_box_state)
@@ -314,9 +288,9 @@ def signal_plot(plot_box_state: PlotState,
 					width=width, height=height) as (status, is_down):
 
 		if status == 'pressed': # and plot_box_state.plot_state.is_WithTimeRange():
-			emit( StartDrag(id_=plot_box_state.id_) )
+			emit( DragAction.StartDrag(id_=plot_box_state.id_) )
 		elif status == 'released': # and plot_box_state.plot_state.is_WithTimeRange():
-			emit( EndDrag(id_=plot_box_state.id_) )
+			emit( DragAction.EndDrag(id_=plot_box_state.id_) )
 		# im.text("{!r:<10}   {!r:<5}".format(status, is_held))
 
 
@@ -333,7 +307,7 @@ def signal_plot(plot_box_state: PlotState,
 				show_imgui_plot(plot_box_state, signal, width=-1, height=-1, ui_settings=ui_settings)
 
 			if status == 'held':
-				# Unfortunately, a StartDrag/EndDrag will only be processed after draw()
+				# Unfortunately, a DragAction.[StartDrag/EndDrag] will only be processed after draw()
 				# So without this if, the drag code is called once before, and once after a drag ends,
 				# without being reflected in the drag_state.
 				# In the latter case, If the mouse isn't dragging, drag_delta == (0,0)
@@ -349,7 +323,7 @@ def signal_plot(plot_box_state: PlotState,
 										plot_draw_area, drag_origin, drag_delta
 									 )
 				if plot_box_state .plot_state .time_range != updated_time_range:
-					emit( SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
+					emit( PlotAction.SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
 
 	im.pop_style_color()
 

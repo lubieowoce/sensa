@@ -30,37 +30,24 @@ import imgui as im
 
 
 
-SourceState, \
-	Empty, \
-	Full, \
-= sumtype.with_constructors(
-'SourceState', [
-	('Empty', [('id_', Id)]),
-	('Full',  [('id_', Id), ('signal_id', SignalId)])
-	#                        ^ the source signal
-]
-)
+class SourceState(sumtype):
+	def Empty(id_: Id): ...
+	def Full (id_: Id, signal_id: SignalId): ...
+	#                  ^ the source signal
 
-def eval_node(src) -> Fun[ [Dict[SignalId, Signal]], Maybe[List[Signal]] ]:
-	return  lambda signals: Just([signals[src.signal_id]]) if src.is_Full() else Nothing()
+	def eval_node(src) -> Fun[ [Dict[SignalId, Signal]], Maybe[List[Signal]] ]:
+		return  lambda signals: Just([signals[src.signal_id]]) if src.is_Full() else Nothing()
 
-def to_node(src) -> ng.Node:
-	return ng.Node(n_inputs=0, n_outputs=1)
-
-SourceState.eval_node = eval_node
-SourceState.to_node   = to_node
+	def to_node(src) -> ng.Node:
+		return ng.Node(n_inputs=0, n_outputs=1)
 
 
 
-SourceAction, \
-	SetEmpty, \
-	SelectSignal, \
-= sumtype.with_constructors(
-'SourceAction', [
-	('SetEmpty',     [('id_', Id)]), \
-	('SelectSignal', [('id_', Id), ('signal_id', SignalId)]), \
-]
-)
+
+
+class SourceAction(sumtype):
+	def SetEmpty    (id_: Id): ...
+	def SelectSignal(id_: Id, signal_id: SignalId): ...
 
 
 @effectful(ID, ACTIONS)
@@ -70,7 +57,7 @@ def initial_source_state():
 
 	id_ = get_id()
 	state = SourceState.Empty(id_=id_)
-	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	emit(ng.GraphAction.AddNode(id_=id_, node=state.to_node()))
 	return state
 
 
@@ -82,12 +69,12 @@ def update_source(source_state: SourceState, action: SourceAction) -> Eff(ACTION
 	old_state = source_state
 
 	if action.is_SetEmpty():
-		return Empty(id_=old_state.id_)
+		return SourceState.Empty(id_=old_state.id_)
 
 	elif action.is_SelectSignal():
-		return Full(id_=old_state.id_, signal_id=action.signal_id)
+		return SourceState.Full(id_=old_state.id_, signal_id=action.signal_id)
 	else:
-		impossible("Unsupported action: "+action)
+		action.impossible()
 		return old_state
 
 
@@ -130,9 +117,9 @@ def signal_source_window(
 					# invert `visible_signal_names` to find the signal id
 					signal_name_to_id = {sig_name: sig_id for (sig_id, sig_name) in visible_signal_names.items()}
 					selected_signal_id = signal_name_to_id[o_selected_signal_name]
-					emit( SelectSignal(id_=source_state.id_, signal_id=selected_signal_id) )
+					emit( SourceAction.SelectSignal(id_=source_state.id_, signal_id=selected_signal_id) )
 				else:
-					emit( SetEmpty(id_=source_state.id_) )
+					emit( SourceAction.SetEmpty(id_=source_state.id_) )
 		else:
 			im.text("No signals available")
 

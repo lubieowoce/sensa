@@ -45,7 +45,7 @@ Graph = namedtuple('Graph', ['nodes', 'links'])
 #   but an input can be connected to only one output.
 #   (for now - we might add 'variadic inputs',
 #    or inputs that connect to any number of outputs) 
-empty_graph = Graph(nodes=m(), links=s())
+Graph.empty = Graph(nodes=m(), links=s())
 
 
 
@@ -55,19 +55,12 @@ empty_graph = Graph(nodes=m(), links=s())
 
 # links : Set[ (InputSlotId, OutputSlotId) ]
 
-GraphAction, \
-	AddNode, \
-	RemoveNode, \
-	Connect, \
-	Disconnect, \
-= sumtype.with_constructors(
-'GraphAction', [
-	('AddNode',     [('id_', Id), ('node', Node)]),
-	('RemoveNode',  [('id_', Id)]),
-	('Connect',     [('source_slot', OutputSlotId), ('dest_slot', InputSlotId)]),
-	('Disconnect',  [('source_slot', OutputSlotId), ('dest_slot', InputSlotId)]),
-]
-)
+class GraphAction(sumtype): 
+	def AddNode(id_: Id, node: Node): ...
+	def RemoveNode(id_: Id): ...
+	def Connect   (source_slot: OutputSlotId, dest_slot: InputSlotId): ...
+	def Disconnect(source_slot: OutputSlotId, dest_slot: InputSlotId): ...
+
 
 @effectful(EFFECTS)
 def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
@@ -111,7 +104,7 @@ def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
 
 
 	if new_graph is not old_graph:
-		emit_effect(EvalGraph())
+		emit_effect(GraphEffect.EvalGraph())
 		return new_graph
 	else:
 		return old_graph
@@ -346,7 +339,7 @@ def graph_window(graph: Graph):
 		# buttons
 		conn = im.button("Connect")
 		if conn and SELECTED_SLOTS_CONNECT['source'] != None and SELECTED_SLOTS_CONNECT['dest'] != None:
-			emit(Connect(SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']))
+			emit( GraphAction.Connect(SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']))
 			SELECTED_SLOTS_CONNECT['source'] = None
 			SELECTED_SLOTS_CONNECT['dest']   = None
 
@@ -380,7 +373,7 @@ def graph_window(graph: Graph):
 
 		conn = im.button("Disconnect")
 		if conn and SELECTED_SLOTS_DISCONNECT['source'] != None and SELECTED_SLOTS_DISCONNECT['dest'] != None:
-			emit(Disconnect(SELECTED_SLOTS_DISCONNECT['source'], SELECTED_SLOTS_DISCONNECT['dest']))
+			emit(GraphAction.Disconnect(SELECTED_SLOTS_DISCONNECT['source'], SELECTED_SLOTS_DISCONNECT['dest']))
 			SELECTED_SLOTS_DISCONNECT['source'] = None
 			SELECTED_SLOTS_DISCONNECT['dest']   = None
 
@@ -390,13 +383,8 @@ def graph_window(graph: Graph):
 		im.text(graph_repr(graph))
 
 
-GraphEffect, \
-	EvalGraph, \
-= sumtype.with_constructors(
-'GraphEffect', [
-	('EvalGraph', []),
-]
-)
+class GraphEffect(sumtype):
+	def EvalGraph(): ...
 
 
 def handle_graph_effect(graph, source_signals, boxes, command: GraphEffect):

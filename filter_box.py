@@ -48,31 +48,16 @@ FilterId = str
 
 
 
-FilterState, \
-	Filter, \
-= sumtype.with_constructors(
-'FilterState', [
+class FilterState(sumtype):
 	# ('NoFilter', []),
-	('Filter',	 [('filter_id', FilterId),
-				  ('params',    PMap)]),
-				  # ('params',    PMap_[str, float])]),
-]
-)
+	def Filter(filter_id: FilterId, params: PMap): ...
 
 
 
-FilterAction, \
-	SetParam, \
-= sumtype.with_constructors(
-'FilterAction', [
-	# ('UnsetFilter', [('id_', Id)]),
-	# ('SetFilter',   [('id_', Id), ('filter_id', FilterId)]),
-
-	('SetParam', [('id_', Id),
-				  ('name',  str),
-				  ('value', float)])
-]
-)
+class FilterAction(sumtype):
+	# def UnsetFilter(id_: Id): ...
+	# def SetFilter(id_: Id, filter_id: FilterId): ...
+	def SetParam(id_: Id, name:  str, value: float): ...
 
 
 FilterBoxState = typing.NamedTuple('FilterBoxState', [('id_', Id),
@@ -121,9 +106,9 @@ def initial_filter_box_state(filter_id: FilterId) -> Eff(ID, ACTIONS)[FilterBoxS
 	id_ = get_id()
 	state = FilterBoxState(
 		id_=id_,
-		filter_state=Filter(filter_id=filter_id, params=default_parameters[filter_id] )
+		filter_state=FilterState.Filter(filter_id=filter_id, params=default_parameters[filter_id] )
 	)
-	emit(ng.AddNode(id_=id_, node=to_node(state)))
+	emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state)))
 
 	return state
 
@@ -201,7 +186,7 @@ def filter_box_window(
 														 min_value=0.001, max_value=95.,
 														 power=slider_power)
 				if changed:
-					emit( SetParam(id_=filter_box_state.id_, name=param_name, value=new_param_val) )
+					emit( FilterAction.SetParam(id_=filter_box_state.id_, name=param_name, value=new_param_val) )
 
 
 			

@@ -34,22 +34,12 @@ from eeg_signal import Signal
 from read_edf import read_edf
 
 
-FileEffect, \
-	Load_, \
-= sumtype.with_constructors(
-'FileEff', [
-	('Load', [('filename', str)]),
-]
-)
+class FileAction(sumtype):
+	def Load(filename: str): ...
 
 
-FileAction, \
-	Load, \
-= sumtype.with_constructors(
-'FileAction', [
-	('Load', [('filename', str)]),
-]
-)
+class FileEffect(sumtype):
+	def Load(filename: str): ...
 
 
 

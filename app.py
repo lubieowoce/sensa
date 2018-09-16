@@ -120,7 +120,7 @@ def sensa_app_init():
 	app_state_init()
 
 	if __was_reloaded__:
-		for cmd in (LoadUserActionHistory_(), RunHistory_()):
+		for cmd in (AppStateEffect.LoadUserActionHistory(), AppStateEffect.RunHistory()):
 			handle_app_state_effect(cmd)
 		__was_reloaded__ = False
 
@@ -227,7 +227,7 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 	elif msg.is_DoAppRunner():
 		command = msg.command
 		if command.is_Reload():
-			handle_app_state_effect(SaveUserActionHistory_()) # preserve history across reloads
+			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) # preserve history across reloads
 			msg_to_render_loop = 'reload'
 		elif command.is_Exit():
 			msg_to_render_loop ='shutdown'
@@ -263,7 +263,7 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
 		except Exception as ex:
 			# state doesn't get updated, because the above assignment never ran
-			return Crash(origin='update', cause=action, exception=ex)
+			return AppControl.Crash(origin='update', cause=action, exception=ex)
 
 		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
@@ -271,9 +271,9 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 		for command in eff_res[EFFECTS]:
 
 			if type(command) == AppStateEffect:
-				return DoApp(command=command)
+				return AppControl.DoApp(command=command)
 			elif type(command) == AppRunnerEffect:
-				return DoAppRunner(command=command)
+				return AppControl.DoAppRunner(command=command)
 			# ^ These effects affect the whole app, and can
 			# manage the action history, action saving, loading,
 			# app reloading, etc. This function only handles
@@ -284,12 +284,12 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 				state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			except Exception as ex:
 				# state doesn't get updated, because the above assignment never ran
-				return Crash(origin='handle', cause=command, exception=ex)
+				return AppControl.Crash(origin='handle', cause=command, exception=ex)
 			
 			current_signal_id = eff_res[SIGNAL_ID]
 
 	# if actions_to_process: print(flush=True)
-	return Success()
+	return AppControl.Success()
 
 
 
@@ -323,7 +323,7 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 
 	for group in (source_boxes, filter_boxes, plots):
 		for (id_, box) in group.items():
-			emit(ng.AddNode(id_, box.to_node()))
+			emit(ng.GraphAction.AddNode(id_, box.to_node()))
 
 	return m(
 		resources = m(),
@@ -334,7 +334,7 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 			box_outputs = m()    # type: PMap_[Id, Maybe[Signal]] 
 	    ),
 	    
-		graph = ng.empty_graph,
+		graph = ng.Graph.empty,
 	    link_selection = LinkSelection.empty,
 		source_boxes = source_boxes,
 		plots		 = plots,
@@ -364,9 +364,9 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			can_create_link     = ng.is_input_slot_free(state.graph, link[1])
 			link_already_exists = link in state.graph.links
 			if link_already_exists:
-				emit( ng.Disconnect(*link) )
+				emit( ng.GraphAction.Disconnect(*link) )
 			elif can_create_link:
-				emit( ng.Connect(*link) )
+				emit( ng.GraphAction.Connect(*link) )
 			else: 
 				# link is invalid - e.g. connects to a filled slot
 				# but we empty it after anyway, so do nothing
@@ -427,20 +427,20 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 	elif type(action) == AppStateAction:
 		emit_effect(
 			{
-				ResetState():  ResetState_(),
-			 	SaveState():   SaveState_(),
-				LoadState():   LoadState_(),
-				ResetUserActionHistory(): ResetUserActionHistory_(),
-				SaveUserActionHistory():  SaveUserActionHistory_(),
-				LoadUserActionHistory():  LoadUserActionHistory_(),
-				RunHistory(): RunHistory_(),
+				AppStateAction.ResetState():  AppStateEffect.ResetState(),
+			 	AppStateAction.SaveState():   AppStateEffect.SaveState(),
+				AppStateAction.LoadState():   AppStateEffect.LoadState(),
+				AppStateAction.ResetUserActionHistory(): AppStateEffect.ResetUserActionHistory(),
+				AppStateAction.SaveUserActionHistory():  AppStateEffect.SaveUserActionHistory(),
+				AppStateAction.LoadUserActionHistory():  AppStateEffect.LoadUserActionHistory(),
+				AppStateAction.RunHistory(): AppStateEffect.RunHistory(),
 			}[action]
 		)
 	elif type(action) == AppRunnerAction:
 		emit_effect(
 			{
-				Reload(): Reload_(),
-			 	Exit():   Exit_(),
+				AppRunnerAction.Reload(): AppRunnerEffect.Reload(),
+			 	AppRunnerAction.Exit():   AppRunnerEffect.Exit(),
 			}[action]
 		)
 
@@ -449,7 +449,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 	if o_changed_box != None:
 		# emit(ng.NodeChanged(id_=o_changed_box))
-		emit_effect(ng.EvalGraph())
+		emit_effect(ng.GraphEffect.EvalGraph())
 
 	return (new_state if new_state is not None else state) \
 			.transform(['n_actions'], lambda x: x+1)	
@@ -499,69 +499,42 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 # the render loop in `reloadble_imgui_app`
 # has to handle those.
 
-AppStateAction, \
-	ResetState, \
-	SaveState, \
-	LoadState, \
-    ResetUserActionHistory, \
-    SaveUserActionHistory, \
-	LoadUserActionHistory, \
-	RunHistory, \
-= sumtype.with_constructors(
-'AppStateAction', [
-	('ResetState', []),
-	('SaveState', []),
-	('LoadState', []),
-	('ResetUserActionHistory', []),
-	('SaveUserActionHistory', []),
-	('LoadUserActionHistory', []),
-	('RunHistory', []),
-])
+class AppStateAction(sumtype):
+	def ResetState(): ...
+	def SaveState(): ...
+	def LoadState(): ...
+	def ResetUserActionHistory(): ...
+	def SaveUserActionHistory(): ...
+	def LoadUserActionHistory(): ...
+	def RunHistory(): ...
 
 
-AppStateEffect, \
-	ResetState_, \
-	SaveState_, \
-	LoadState_, \
-	ResetUserActionHistory_, \
-	SaveUserActionHistory_, \
-	LoadUserActionHistory_, \
-	RunHistory_, \
-= sumtype.with_constructors(
-'AppStateEffect', [
-	('ResetState', []),
-	('SaveState', []),
-	('LoadState', []),
-	('ResetUserActionHistory', []),
-	('SaveUserActionHistory', []),
-	('LoadUserActionHistory', []),
-	('RunHistory', []),
-])
+class AppStateEffect(sumtype):
+	def ResetState(): ...
+	def SaveState(): ...
+	def LoadState(): ...
+	def ResetUserActionHistory(): ...
+	def SaveUserActionHistory(): ...
+	def LoadUserActionHistory(): ...
+	def RunHistory(): ...
 
 # Actions that only the loop that actually
 # runs the function can handle
-AppRunnerAction, Reload, Exit \
-= sumtype.with_constructors(
-'AppRunnerAction', [('Reload', []), ('Exit', [])]
-)
 
-AppRunnerEffect, Reload_, Exit_ \
-= sumtype.with_constructors(
-'AppRunnerEffect', [('Reload', []), ('Exit', [])]
-)
+class AppRunnerAction(sumtype):
+	def Reload(): ...
+	def Exit(): ...
 
-AppControl, \
-	Success, \
-	Crash, \
-	DoApp, \
-	DoAppRunner, \
-= sumtype.with_constructors(
-'AppControl', [
-	('Success', []),
-	('Crash', [('cause', object), ('origin', str), ('exception', Exception)]),
-	('DoApp', 		[('command', AppStateEffect)]),
-	('DoAppRunner', [('command', AppRunnerEffect)])
-])
+class AppRunnerEffect(sumtype):
+	def Reload(): ...
+	def Exit(): ...
+
+class AppControl(sumtype): 
+	def Success(): ...
+	def Crash(cause: object, origin: str, exception: Exception): ...
+	def DoApp(command: AppStateEffect): ...
+	def DoAppRunner(command: AppRunnerEffect): ...
+
 
 
 def handle_app_state_effect(command) -> IO_[None]:
@@ -613,16 +586,11 @@ LinkSelection = NamedTuple('LinkSelection', [
 							('dst_slot', Optional[ng.InputSlotId]) ])
 LinkSelection.empty = LinkSelection(src_slot=None, dst_slot=None)
 
-LinkSelectionAction, \
-	ClickOutput, \
-	ClickInput, \
-	Clear, \
-= sumtype.with_constructors( 
-'LinkSelectionAction', [
-	('ClickOutput',  [('slot', ng.OutputSlotId)]),
-	('ClickInput',   [('slot', ng.InputSlotId)]),
-	('Clear', [])
- ])
+class LinkSelectionAction(sumtype):
+	def ClickOutput(slot: ng.OutputSlotId): ...
+	def ClickInput (slot: ng.InputSlotId): ...
+	def Clear(): ...
+
 
 
 def update_link_selection(state: LinkSelection, graph, action: LinkSelectionAction) -> LinkSelection:
@@ -926,7 +894,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 					changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
 					if changed:
-						emit(ClickInput(slot))
+						emit(LinkSelectionAction.ClickInput(slot))
 
 					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
 					slot_center_positions[('in', id_, slot_ix)] = center_pos
@@ -940,7 +908,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 					changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
 					if changed:
-						emit(ClickOutput(slot))
+						emit(LinkSelectionAction.ClickOutput(slot))
 
 					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
 					slot_center_positions[('out', id_, slot_ix)] = center_pos
