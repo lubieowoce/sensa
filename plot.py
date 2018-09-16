@@ -57,7 +57,7 @@ import math
 import numpy as np
 import scipy.ndimage
 # from pyrsistent import (m, pmap, v, pvector,)
-from uniontype import union
+from sumtype import sumtype
 
 # Signal:
 # 	  data,
@@ -76,7 +76,7 @@ from uniontype import union
 DragState, \
 	NotDragging, \
 	Dragging, \
-= union(
+= sumtype.with_constructors(
 'DragState', [
 	('NotDragging', []),
 	('Dragging', 	[('time_range_before_drag', TimeRange)]),
@@ -86,7 +86,7 @@ DragState, \
 DragAction, \
 	StartDrag, \
 	EndDrag, \
-= union(
+= sumtype.with_constructors(
 'DragAction', [
 	('StartDrag',	 [('id_', Id)]),
 	('EndDrag', 	 [('id_', Id)]),
@@ -98,7 +98,7 @@ DragAction, \
 PlotState, \
 	NoTimeRange, \
 	WithTimeRange, \
-= union(
+= sumtype.with_constructors(
 'PlotState', [
 	('NoTimeRange', [ ]),
 	('WithTimeRange', 	[('time_range', TimeRange)]),
@@ -109,7 +109,7 @@ PlotState, \
 PlotAction, \
 	SetTimeRange, \
 	SetNoTimeRange,\
-= union(
+= sumtype.with_constructors(
 'PlotAction', [
 	('SetTimeRange',   [('id_', Id),
 				 	    ('time_range', TimeRange)]), 

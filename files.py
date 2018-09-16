@@ -8,7 +8,7 @@ from utils.types import (
 	IO_,
 )
 from utils import impossible
-from uniontype import union
+from sumtype import sumtype
 
 from eff import (
 	Eff, effectful,
@@ -36,7 +36,7 @@ from read_edf import read_edf
 
 FileEffect, \
 	Load_, \
-= union(
+= sumtype.with_constructors(
 'FileEff', [
 	('Load', [('filename', str)]),
 ]
@@ -45,7 +45,7 @@ FileEffect, \
 
 FileAction, \
 	Load, \
-= union(
+= sumtype.with_constructors(
 'FileAction', [
 	('Load', [('filename', str)]),
 ]

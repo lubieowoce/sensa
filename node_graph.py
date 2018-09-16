@@ -5,7 +5,7 @@ from utils.types import (
 	PMap_,
 )
 from collections import namedtuple
-from uniontype import union
+from sumtype import sumtype
 from pyrsistent import s, m, pmap, pvector
 
 from functools import reduce
@@ -60,7 +60,7 @@ GraphAction, \
 	RemoveNode, \
 	Connect, \
 	Disconnect, \
-= union(
+= sumtype.with_constructors(
 'GraphAction', [
 	('AddNode',     [('id_', Id), ('node', Node)]),
 	('RemoveNode',  [('id_', Id)]),
@@ -392,7 +392,7 @@ def graph_window(graph: Graph):
 
 GraphEffect, \
 	EvalGraph, \
-= union(
+= sumtype.with_constructors(
 'GraphEffect', [
 	('EvalGraph', []),
 ]

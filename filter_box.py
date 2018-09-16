@@ -12,7 +12,7 @@ from pyrsistent import PMap, m
 
 import imgui as im
 
-from uniontype import union
+from sumtype import sumtype
 
 from utils import (chain, impossible, bad_action, Maybe, Nothing, Just)
 import utils as util
@@ -50,7 +50,7 @@ FilterId = str
 
 FilterState, \
 	Filter, \
-= union(
+= sumtype.with_constructors(
 'FilterState', [
 	# ('NoFilter', []),
 	('Filter',	 [('filter_id', FilterId),
@@ -63,7 +63,7 @@ FilterState, \
 
 FilterAction, \
 	SetParam, \
-= union(
+= sumtype.with_constructors(
 'FilterAction', [
 	# ('UnsetFilter', [('id_', Id)]),
 	# ('SetFilter',   [('id_', Id), ('filter_id', FilterId)]),

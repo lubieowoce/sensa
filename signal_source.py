@@ -15,7 +15,7 @@ from eff import (
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
 	eff_operation,
 )
-from uniontype import union
+from sumtype import sumtype
 
 import node_graph as ng
 
@@ -33,7 +33,7 @@ import imgui as im
 SourceState, \
 	Empty, \
 	Full, \
-= union(
+= sumtype.with_constructors(
 'SourceState', [
 	('Empty', [('id_', Id)]),
 	('Full',  [('id_', Id), ('signal_id', SignalId)])
@@ -55,7 +55,7 @@ SourceState.to_node   = to_node
 SourceAction, \
 	SetEmpty, \
 	SelectSignal, \
-= union(
+= sumtype.with_constructors(
 'SourceAction', [
 	('SetEmpty',     [('id_', Id)]), \
 	('SelectSignal', [('id_', Id), ('signal_id', SignalId)]), \

@@ -47,7 +47,7 @@ nps = ch(sorted, np)
 
 from typing import NamedTuple
 from collections import OrderedDict
-# from uniontype import union
+# from sumtype import sumtype
 
 NodeId = NamedTuple('NodeId', [('id_', int)])
 

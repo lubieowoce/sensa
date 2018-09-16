@@ -23,6 +23,7 @@ import imgui as im
 
 from pyrsistent import (m , pmap,) #thaw, freeze,)#v, pvector)
 from collections import deque
+from sumtype import sumtype
 import pickle
 # import numpy as np
 
@@ -36,8 +37,6 @@ from utils.types import (
 	Action, Effect,
 	IO_,
 )
-
-from uniontype import union
 
 from eff import (
 	Eff, run_eff,
@@ -508,7 +507,7 @@ AppStateAction, \
     SaveUserActionHistory, \
 	LoadUserActionHistory, \
 	RunHistory, \
-= union(
+= sumtype.with_constructors(
 'AppStateAction', [
 	('ResetState', []),
 	('SaveState', []),
@@ -528,7 +527,7 @@ AppStateEffect, \
 	SaveUserActionHistory_, \
 	LoadUserActionHistory_, \
 	RunHistory_, \
-= union(
+= sumtype.with_constructors(
 'AppStateEffect', [
 	('ResetState', []),
 	('SaveState', []),
@@ -541,13 +540,13 @@ AppStateEffect, \
 
 # Actions that only the loop that actually
 # runs the function can handle
-AppRunnerAction, Reload, Exit = \
-union(
+AppRunnerAction, Reload, Exit \
+= sumtype.with_constructors(
 'AppRunnerAction', [('Reload', []), ('Exit', [])]
 )
 
-AppRunnerEffect, Reload_, Exit_ = \
-union(
+AppRunnerEffect, Reload_, Exit_ \
+= sumtype.with_constructors(
 'AppRunnerEffect', [('Reload', []), ('Exit', [])]
 )
 
@@ -556,7 +555,7 @@ AppControl, \
 	Crash, \
 	DoApp, \
 	DoAppRunner, \
-= union(
+= sumtype.with_constructors(
 'AppControl', [
 	('Success', []),
 	('Crash', [('cause', object), ('origin', str), ('exception', Exception)]),
@@ -618,7 +617,7 @@ LinkSelectionAction, \
 	ClickOutput, \
 	ClickInput, \
 	Clear, \
-= union( 
+= sumtype.with_constructors( 
 'LinkSelectionAction', [
 	('ClickOutput',  [('slot', ng.OutputSlotId)]),
 	('ClickInput',   [('slot', ng.InputSlotId)]),
