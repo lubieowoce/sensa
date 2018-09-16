@@ -10,7 +10,10 @@ typing = "*"
 pyrsistent = "*"
 scipy = "*"
 networkx = "*"
-"c341a03" = {editable = true, extras = ["full"], path = ".\\..\\pyimgui"}
+"05603f3" = {path = ".\\..\\arrayplot", editable = true}
+cython = "*"
+imgui = {path = "./../pyimgui", editable = true, extras = ["full"]}
+"1077c9c" = {editable = true, path = "./../arrayplot"}
 sumtype = "==0.10.0.post1"
 # imgui = {git = "https://github.com/lubieowoce/pyimgui"}
 

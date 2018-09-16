@@ -8,7 +8,7 @@ Install from github:
 
 Install a package from a local directory into pipenv:
 ```
-> pipenv install --editable ..\pyimgui[full]
+> pipenv install -e ..\pyimgui[full]
 ```
 
 ## Pipenv troubleshooting

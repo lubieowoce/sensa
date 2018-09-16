@@ -173,8 +173,6 @@ def app_state_init():
 	# 		not exactly app state. This would follow the responsibility scope
 	#		of `update_state_with_actions_and_run_effects` - user action history
 	# 		is managed separately, by `handle_app_state_effects` (which maybe should be renamed...)
-	#		The problem is, sometimes re-initing the app state without clearing
-	#		user_action_history.
 
 	ui = {
 		'settings': {
@@ -328,13 +326,15 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 			emit(ng.AddNode(id_, box.to_node()))
 
 	return m(
-		graph = ng.empty_graph,
+		resources = m(),
 
 		data = m(
 			signals = m(),      # type: PMap_[SignalId, Signal]
 			signal_names = m(), # type: PMap_[SignalId, str]
 			box_outputs = m()    # type: PMap_[Id, Maybe[Signal]] 
 	    ),
+	    
+		graph = ng.empty_graph,
 	    link_selection = LinkSelection.empty,
 		source_boxes = source_boxes,
 		plots		 = plots,
