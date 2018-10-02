@@ -38,9 +38,6 @@ from filters import (
 
 
 
-FILTER_BOX_OUTPUT_SIGNAL_ID = 'filter_box_output'
-
-
 
 FilterId = str
 
