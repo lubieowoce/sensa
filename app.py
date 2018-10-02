@@ -49,11 +49,12 @@ from eff import (
 
 import utils as util
 
-from imgui_widget import window, child, color, only_draw_if
-from better_combo import str_combo
-from double_click_listbox import double_click_listbox
+from components.grouped import window, child, only_draw_if
+from components.styled import color
+from components.str_combo import str_combo
+from components.double_click_listbox import double_click_listbox
 # from double_click_selectable import double_click_selectable
-# from draggable import draggable
+# from components.draggable import draggable
 
 import persist
 

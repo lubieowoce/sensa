@@ -26,8 +26,8 @@ import node_graph as ng
 
 
 from eeg_signal import Signal
-from imgui_widget import window
-from better_combo import str_combo_with_none
+from components.grouped import window
+from components.str_combo import str_combo_with_none
 
 # from trans import Trans
 

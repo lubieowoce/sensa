@@ -13,8 +13,8 @@ from utils.types import (
 	Fun, IMGui, Actions,
 )
 
-from imgui_widget import window, child
-from draggable import draggable
+from components.grouped import window, child
+from components.draggable import draggable
 
 from debug_util import (
 	debug_log, debug_log_time, #debug_log_dict,
@@ -100,8 +100,8 @@ class PlotAction(sumtype):
 PlotBoxState = typing.NamedTuple(
 'PlotBoxState', [
 	('id_', Id),
-	('plot_state',       PlotState),
-	('drag_state',		 DragState),
+	('plot_state', PlotState),
+	('drag_state', DragState),
 ]
 )
 

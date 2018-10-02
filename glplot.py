@@ -1,5 +1,5 @@
 import imgui as im
-from imgui_widget import window
+from components.grouped import window
 from eff import effectful, ACTIONS, eff_operation
 from utils.types import IMGui
 import arrayplot as aplt

@@ -19,8 +19,8 @@ from eff import (
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
 	eff_operation,
 )
-from imgui_widget import window
-from better_combo import str_combo_with_none
+from components.grouped import window
+from components.str_combo import str_combo_with_none
 
 InputSlotId  = NamedTuple('InputSlotId',  [('node_id', Id), ('ix', int)])
 OutputSlotId = NamedTuple('OutputSlotId', [('node_id', Id), ('ix', int)])

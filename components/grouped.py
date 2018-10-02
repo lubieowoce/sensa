@@ -1,37 +1,49 @@
 from functools import partial
 from utils.types import IMGui
-from typing import Any
+from typing import Any, Callable, Generic, TypeVar, Optional
 
 import imgui
 
 
+__all__ = [
+	'window',
+	'child',
+	'group',
+	'only_draw_if',
+]
 
 
-class IM:
-	def __init__(im, begin, end, *args, **kwargs):
-		im.begin = begin
-		im.end = end
-		im.args = args
-		im.kwargs = kwargs
 
-	def __enter__(im) -> IMGui[Any]:
-		return im.begin(*im.args, **im.kwargs) 
+A = TypeVar('A')
 
-	def __exit__(im, exc_type, exc, traceback) -> IMGui[None]:
-		im.end()
+class _IMGuiCtx(Generic[A]):
+	__slots__ = ('begin', 'end', 'args', 'kwargs')
+
+	"Wrap imgui begin_*/end_* functions with a context manager"
+	def __init__(self, begin: Callable[..., A], end: Callable[[], Any], *args, **kwargs) -> None:
+		self.begin = begin
+		self.end = end
+		self.args = args
+		self.kwargs = kwargs
+
+	def __enter__(self) -> IMGui[A]:
+		return self.begin(*self.args, **self.kwargs) 
+
+	def __exit__(self, exc_type, exc, traceback) -> IMGui[Optional[bool]]:
+		self.end()
 		if exc_type == _DontDrawWindowException:
 			return True # swallow the exception
 
 
-window = partial(IM, imgui.begin, 		imgui.end)
-group  = partial(IM, imgui.begin_group, imgui.end_group)
-child  = partial(IM, imgui.begin_child, imgui.end_child)
+window = partial(_IMGuiCtx, imgui.begin,       imgui.end)
+group  = partial(_IMGuiCtx, imgui.begin_group, imgui.end_group)
+child  = partial(_IMGuiCtx, imgui.begin_child, imgui.end_child)
 
 
 
 class _DontDrawWindowException(Exception): pass
 
-def only_draw_if(cond: bool):
+def only_draw_if(cond: bool) -> None:
 	"""
 	NOTE:
 		This is meant to be used to improve performance,
@@ -67,34 +79,6 @@ def only_draw_if(cond: bool):
 
 
 
-
-class IMColor:
-	def __init__(imc, colors):
-		imc.colors = colors
-
-	def __enter__(imc) -> IMGui[None]:
-		for (col_var, color) in imc.colors.items():
-			imgui.push_style_color(col_var, *color)
-
-	def __exit__(imc, *args) -> IMGui[None]:
-		imgui.pop_style_color(len(imc.colors))
-
-color = IMColor
-
-
-class IMStyle:
-	def __init__(ims, styles):
-		ims.styles = styles
-
-	def __enter__(ims) -> IMGui[None]:
-		for (style_var, value) in ims.styles.items():
-			imgui.push_style_var(style_var, value)
-
-	def __exit__(ims, *args) -> IMGui[None]:
-		imgui.pop_style_var(len(ims.styles))
-
-
-style = IMStyle
 
 
 

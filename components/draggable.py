@@ -1,7 +1,8 @@
 from typing import Tuple
 
 import imgui as im
-from imgui_widget import child, style
+from components.grouped import child
+from components.styled import style
 
 import contextlib
 

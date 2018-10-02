@@ -19,7 +19,7 @@ from utils.types import (
 	IO_, IMGui,
 )
 
-from imgui_widget import window #, group, child
+from components.grouped import window #, group, child
 
 from utils import (
 	uniform_dict_type, uniform_sequence_type, is_sequence_uniform,
