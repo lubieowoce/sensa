@@ -257,13 +257,15 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 
 	actions_to_process = user_actions[:]
 
+	prev_frame_state = state
+
 	# if actions_to_process: print('running actions:', flush=True)
 	for action in actions_to_process:
 		# print("\t{}".format(action), flush=True)
 		try:
 			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
 		except Exception as ex:
-			# state doesn't get updated, because the above assignment never ran
+			state = prev_frame_state
 			return AppControl.Crash(origin='update', cause=action, exception=ex)
 
 		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
@@ -284,7 +286,7 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 			try:
 				state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
 			except Exception as ex:
-				# state doesn't get updated, because the above assignment never ran
+				state = prev_frame_state
 				return AppControl.Crash(origin='handle', cause=command, exception=ex)
 			
 			current_signal_id = eff_res[SIGNAL_ID]
