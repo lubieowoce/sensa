@@ -231,10 +231,10 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) # preserve history across reloads
 			msg_to_render_loop = 'reload'
 		elif command.is_Exit():
-			msg_to_render_loop ='shutdown'
-		else: util.impossible("unknown DoAppRunner request" + repr(command))
+			msg_to_render_loop = 'shutdown'
+		else: command.impossible()
 
-	else: util.impossible('unknown AppControl request:' + repr(msg))
+	else: msg.impossible()
 
 
 	# TODO: Not sure if this should be here...
@@ -445,7 +445,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			}[action]
 		)
 
-	else: util.impossible('unknown action of type {}:  {}'.format(type(action), action))
+	else: util.impossible('Unknown action of type {}:  {}'.format(type(action), action))
 
 
 	if o_changed_box != None:
@@ -489,7 +489,7 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 
 	# AppStateEffects are processed with `handle_app_state_effect`
 
-	else: util.impossible('unknown command of type {}:  {}'.format(type(command), command))
+	else: util.impossible('Unknown command of type {}:  {}'.format(type(command), command))
 		
 
 
@@ -497,7 +497,7 @@ def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
 # in ways that can be done from within
 # this module. In particular, this module
 # cannot directly terminate or reload itself -
-# the render loop in `reloadble_imgui_app`
+# the render loop in `reloadable_imgui_app`
 # has to handle those.
 
 class AppStateAction(sumtype):
@@ -530,9 +530,10 @@ class AppRunnerEffect(sumtype):
 	def Reload(): ...
 	def Exit(): ...
 
+
 class AppControl(sumtype): 
 	def Success(): ...
-	def Crash(cause: object, origin: str, exception: Exception): ...
+	def Crash(cause: Any, origin: str, exception: Exception): ...
 	def DoApp(command: AppStateEffect): ...
 	def DoAppRunner(command: AppRunnerEffect): ...
 
@@ -575,7 +576,7 @@ def handle_app_state_effect(command) -> IO_[None]:
 		# external (IO) effects, ie file access. Rerunning internal effects
 		# is safe, but running an IO effect twice might give different results
 
-	else: util.impossible('unknown AppStateEffect: ' + repr(command))
+	else: command.impossible()
 
 
 
@@ -604,7 +605,7 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 				state._replace(dst_slot=action.slot) )
 
 	elif action.is_Clear(): return LinkSelection.empty
-	else: util.impossible()
+	else: action.impossible()
 
 # ----------------------------------------------------------
 

@@ -43,11 +43,10 @@ class SourceState(sumtype):
 
 
 
-
-
 class SourceAction(sumtype):
 	def SetEmpty    (id_: Id): ...
 	def SelectSignal(id_: Id, signal_id: SignalId): ...
+
 
 
 @effectful(ID, ACTIONS)

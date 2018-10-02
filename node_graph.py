@@ -100,7 +100,7 @@ def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
 		new_graph = old_graph._replace(links=links.remove( (action.source_slot, action.dest_slot) ))
 
 	else:
-		impossible("Invalid graph action")
+		action.impossible()
 
 
 	if new_graph is not old_graph:

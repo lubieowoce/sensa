@@ -188,7 +188,7 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 					bad_action(msg="Is already dragging: cannot start dragging in state " + plot_box_state)
 
 			else:
-				impossible("Invalid plot state:" + plot_box_state)
+				plot_box_state.impossible()
 
 
 
@@ -207,12 +207,12 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 					return plot_box_state._replace(drag_state=DragState.NotDragging())
 
 			else:
-				impossible("Invalid plot state:" + plot_box_state)
+				plot_box_state.impossible()
 
 
 
 	else:
-		impossible("Action is not a valid PlotAction: "+action)
+		action.impossible()
 
 	return    new_state if new_state != None  else old_state
 

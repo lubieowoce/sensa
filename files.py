@@ -69,7 +69,7 @@ def handle_file_effect(signals: PMap_[SignalId, Signal],
 
 		return (signals.update(new_signals), signal_names.update(new_signal_names))
 	else:
-		impossible("Invalid File command:" + command)
+		command.impossible()
 		return (signals, signal_names)
 
 
