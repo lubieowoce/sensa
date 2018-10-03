@@ -39,7 +39,7 @@ from utils import (
 from eff import (
 	Eff, effectful,
 	ID, ACTIONS,
-	eff_operation,
+	emit, get_id,
 )
 
 from time_range import (
@@ -129,19 +129,16 @@ DEFAULT_TIME_RANGE = TimeRange(0.0, INITIAL_VIEW_SAMPLES_N/200.0)
 PLOT_BOX_ACTION_TYPES = (PlotAction, DragAction)
 PlotBoxAction = Union[PLOT_BOX_ACTION_TYPES]
 
-@effectful(ID, ACTIONS)
-def initial_plot_box_state() -> Eff(ID, ACTIONS)[PlotBoxState]:
-	get_id = eff_operation('get_id')
-	emit = eff_operation('emit')
-
-	id_ = get_id()
+@effectful
+async def initial_plot_box_state() -> Eff[[ID, ACTIONS], PlotBoxState]:
+	id_ = await get_id()
 	state = PlotBoxState(
 				id_=id_,
 				# plot_state=PlotState.NoTimeRange(),
 				plot_state=PlotState.WithTimeRange(DEFAULT_TIME_RANGE), # TODO: not great...
 				drag_state=DragState.NotDragging()
 			)
-	emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state)))
+	await emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state))) # TODO: probably shouldn't be here
 	return state
 
 
@@ -153,11 +150,9 @@ def initial_plot_box_state() -> Eff(ID, ACTIONS)[PlotBoxState]:
 
 
 
-@effectful(ACTIONS)
+# @effectful
 def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> PlotBoxState:
-
 	assert plot_box_state.id_ == action.id_
-	# emit = eff_operation('emit')
 
 	old_state = plot_box_state
 	new_state = None
@@ -210,7 +205,6 @@ def update_plot_box(plot_box_state: PlotBoxState, action: PlotBoxAction) -> Plot
 				plot_box_state.impossible()
 
 
-
 	else:
 		action.impossible()
 
@@ -234,13 +228,13 @@ DATA_GET_START,          DATA_GET_END         = Range("data_get")
 # 0       1       2       3       4       5     i
 
 
-@effectful(ACTIONS)
-def signal_plot_window(
-	plot_box_state:  PlotBoxState,
-	m_inputs: List[Maybe[Signal]],
-	ui_settings: Dict[str, Any]) -> Eff(ACTIONS)[IMGui[None]]:
+@effectful
+async def signal_plot_window(
+		plot_box_state:  PlotBoxState,
+		m_inputs: List[Maybe[Signal]],
+		ui_settings: Dict[str, Any]
+	) -> Eff[[ACTIONS], IMGui[None]]:
 
-	# emit = eff_operation('emit')
 	m_signal = m_inputs[0 ]
 	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
 
@@ -253,7 +247,7 @@ def signal_plot_window(
 		plot_height = im.get_content_region_available().y - 20
 
 
-		signal_plot(plot_box_state, m_signal,
+		await signal_plot(plot_box_state, m_signal,
 					width=plot_width, height=plot_height,
 					ui_settings=ui_settings)
 
@@ -268,18 +262,19 @@ def signal_plot_window(
 
 
 
-@effectful(ACTIONS)
-def signal_plot(plot_box_state: PlotState,
-				m_signal: Maybe[Signal],
-				width: float,
-				height: float,
-				ui_settings) -> IMGui[None]:
+@effectful
+async def signal_plot(
+		plot_box_state: PlotState,
+		m_signal: Maybe[Signal],
+		width: float,
+		height: float,
+		ui_settings
+	) -> Eff[[ACTIONS], IMGui[None]]:
 
 	# TODO: try using IMGui::PlotLines?
 	
 	# m_signal = box_inputs[plot_box_state.id_][0]
 	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
-	emit = eff_operation('emit')
 	drag_state = plot_box_state .drag_state
 
 	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
@@ -288,9 +283,9 @@ def signal_plot(plot_box_state: PlotState,
 					width=width, height=height) as (status, is_down):
 
 		if status == 'pressed': # and plot_box_state.plot_state.is_WithTimeRange():
-			emit( DragAction.StartDrag(id_=plot_box_state.id_) )
+			await emit( DragAction.StartDrag(id_=plot_box_state.id_) )
 		elif status == 'released': # and plot_box_state.plot_state.is_WithTimeRange():
-			emit( DragAction.EndDrag(id_=plot_box_state.id_) )
+			await emit( DragAction.EndDrag(id_=plot_box_state.id_) )
 		# im.text("{!r:<10}   {!r:<5}".format(status, is_held))
 
 
@@ -323,7 +318,7 @@ def signal_plot(plot_box_state: PlotState,
 										plot_draw_area, drag_origin, drag_delta
 									 )
 				if plot_box_state .plot_state .time_range != updated_time_range:
-					emit( PlotAction.SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
+					await emit( PlotAction.SetTimeRange(id_=plot_box_state.id_, time_range=updated_time_range)  )
 
 	im.pop_style_color()
 
@@ -338,7 +333,7 @@ def time_range_after_drag(
 		plot_draw_area: Rect,
 		drag_origin,
 		drag_delta,
-		) -> TimeRange:
+	) -> TimeRange:
 
 	
 	if drag_delta == (0., 0.):

@@ -1,13 +1,12 @@
 import imgui as im
 from components.grouped import window
-from eff import effectful, ACTIONS, eff_operation
+from eff import effectful, ACTIONS, emit
 from utils.types import IMGui
 import arrayplot as aplt
 
 
-@effectful(ACTIONS)
-def show_pleple_window(name, plot_info, multi_resolution_signals, plot_gl_resources, plot_gl_canvas) -> IMGui[None]:
-	emit = eff_operation('emit')
+@effectful
+async def show_pleple_window(name, plot_info, multi_resolution_signals, plot_gl_resources, plot_gl_canvas) -> IMGui[None]:
 	with window(name):
 		window_width, window_height = im.get_content_region_available()
 		window_width, window_height = int(window_width), int(window_height)
@@ -16,7 +15,7 @@ def show_pleple_window(name, plot_info, multi_resolution_signals, plot_gl_resour
 			print("\t### resizing canvas  {} -> {}".format((plot_gl_canvas.width_px, plot_gl_canvas.height_px), (window_width, window_height)), flush=True)
 			del plot_gl_canvas
 			plot_gl_canvas = aplt.init_plot_canvas(window_width, window_height)
-			emit(___new_canvas_(plot_gl_canvas) )
+			await emit(___new_canvas_(plot_gl_canvas) )
 
 		canvas_width  = plot_gl_canvas.width_px
 		canvas_height = plot_gl_canvas.height_px

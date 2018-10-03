@@ -14,11 +14,11 @@ def init_state():
 	current_signal_id = 0
 	
 	# create the initial state	
-	state, eff_res = run_eff(initial_state, id=current_id, signal_id=current_signal_id, effects=[])()
+	state, eff_res = run_eff(initial_state(), id=current_id, signal_id=current_signal_id, effects=[])
 	current_id        = eff_res[ID]
 	current_signal_id = eff_res[SIGNAL_ID]
 	for command in eff_res[EFFECTS]:
-			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
 			current_signal_id = eff_res[SIGNAL_ID]
 
 	assert state != None
@@ -26,12 +26,12 @@ def init_state():
 	# run the initial actions
 	for act in INITIAL_ACTIONS:
 
-		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
+		state, eff_res = run_eff(update(state, act), actions=[], effects=[])
 
 		INITIAL_ACTIONS.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
 
 		for command in eff_res[EFFECTS]:
-			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
 			current_signal_id = eff_res[SIGNAL_ID]
 
 	return state

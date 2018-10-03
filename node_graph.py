@@ -3,6 +3,7 @@ from typing import Any, Set, List, Dict, NamedTuple
 from utils.types import (
 	Id, SignalId,
 	PMap_,
+	IMGui,
 )
 from collections import namedtuple
 from sumtype import sumtype
@@ -17,7 +18,8 @@ import imgui as im
 from eff import (
 	Eff, effectful,
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
-	eff_operation,
+
+	emit, emit_effect,
 )
 from components.grouped import window
 from components.str_combo import str_combo_with_none
@@ -32,15 +34,11 @@ OutputSlotId = NamedTuple('OutputSlotId', [('node_id', Id), ('ix', int)])
 # Node: n_inputs: int, n_outputs: int
 
 Node = NamedTuple('Node', [('n_inputs', int), ('n_outputs', int)])
-# BoxSpec = Any
-# Node = NamedTuple('Node', [('box', BoxSpec)])
-# @property
-# def n_inputs(node: Node) -> int:
-# 	pass
+
 
 Graph = namedtuple('Graph', ['nodes', 'links'])
 # an isomorphic graph, where the nodes are pairs (node_id, [output|input]_slot_ix)
-# would be tree like:
+# would be tree-like:
 #   an output can be connected to multiple inputs,
 #   but an input can be connected to only one output.
 #   (for now - we might add 'variadic inputs',
@@ -62,10 +60,8 @@ class GraphAction(sumtype):
 	def Disconnect(source_slot: OutputSlotId, dest_slot: InputSlotId): ...
 
 
-@effectful(EFFECTS)
-def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
-	emit_effect = eff_operation('emit_effect')
-
+@effectful
+async def update_graph(graph: Graph, action: GraphAction) -> Eff[[EFFECTS], Graph]:
 	nodes, links = graph.nodes, graph.links
 	old_graph = graph
 
@@ -104,7 +100,7 @@ def update_graph(graph: Graph, action: GraphAction) -> Eff(EFFECTS)[Graph]:
 
 
 	if new_graph is not old_graph:
-		emit_effect(GraphEffect.EvalGraph())
+		await emit_effect(GraphEffect.EvalGraph())
 		return new_graph
 	else:
 		return old_graph
@@ -304,10 +300,8 @@ SELECTED_SLOTS_DISCONNECT = {
 	'dest':   None,
 }
 
-@effectful(ACTIONS)
-def graph_window(graph: Graph):
-	emit = eff_operation('emit')
-
+@effectful
+async def graph_window(graph: Graph) -> Eff[[ACTIONS], IMGui[None]]:
 	with window(name="Graph"):
 
 
@@ -339,7 +333,7 @@ def graph_window(graph: Graph):
 		# buttons
 		conn = im.button("Connect")
 		if conn and SELECTED_SLOTS_CONNECT['source'] != None and SELECTED_SLOTS_CONNECT['dest'] != None:
-			emit( GraphAction.Connect(SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']))
+			await emit( GraphAction.Connect(SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']))
 			SELECTED_SLOTS_CONNECT['source'] = None
 			SELECTED_SLOTS_CONNECT['dest']   = None
 
@@ -373,7 +367,7 @@ def graph_window(graph: Graph):
 
 		conn = im.button("Disconnect")
 		if conn and SELECTED_SLOTS_DISCONNECT['source'] != None and SELECTED_SLOTS_DISCONNECT['dest'] != None:
-			emit(GraphAction.Disconnect(SELECTED_SLOTS_DISCONNECT['source'], SELECTED_SLOTS_DISCONNECT['dest']))
+			await emit(GraphAction.Disconnect(SELECTED_SLOTS_DISCONNECT['source'], SELECTED_SLOTS_DISCONNECT['dest']))
 			SELECTED_SLOTS_DISCONNECT['source'] = None
 			SELECTED_SLOTS_DISCONNECT['dest']   = None
 
