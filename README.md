@@ -33,7 +33,7 @@ Not tested, but should work fine!
 
 ## Run
 ```
-> pipenv run python app.py
+> pipenv run python .
 ```
 
 ## Shell
