@@ -59,11 +59,10 @@ async def initial_source_state() -> Eff[[ID], SourceState]:
 
 
 
-@effectful
-async def update_source(
+def update_source(
 		source_state: SourceState, 
 		action: SourceAction
-	) -> Eff[[ACTIONS], SourceState]:
+	) -> SourceState:
 
 	assert source_state.id_ == action.id_
 	old_state = source_state

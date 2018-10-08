@@ -50,7 +50,8 @@ async def handle_file_effect(
 		new_signal_names = {sig_id: name
 							for (sig_id, name)
 							in zip(await get_signal_ids(n_signals),
-								   sorted(new_signals.keys())) # sorted so that ids are assigned deterministaclly
+								   # sorted so that ids are assigned deterministically
+								   sorted(new_signals.keys()))
 						   }
 		# then, map the ids to the correct signals
 		new_signals = {sig_id: new_signals[sig_name]

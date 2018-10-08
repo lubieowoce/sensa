@@ -146,7 +146,8 @@ def app_state_init():
 	for action in eff_res[ACTIONS]:
 		state, eff_res = run_eff(update(state, action), actions=[], effects=[])
 
-		eff_res[ACTIONS].extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		eff_res[ACTIONS].extend(eff_res[ACTIONS]) 
 
 		for command in eff_res[EFFECTS]:
 			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
@@ -159,7 +160,8 @@ def app_state_init():
 
 		state, eff_res = run_eff(update(state, act), actions=[], effects=[])
 
-		INITIAL_ACTIONS.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		INITIAL_ACTIONS.extend(eff_res[ACTIONS])
 
 		for command in eff_res[EFFECTS]:
 			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
@@ -228,7 +230,8 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 	elif msg.is_DoAppRunner():
 		command = msg.command
 		if command.is_Reload():
-			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) # preserve history across reloads
+			# preserve history across reloads
+			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) 
 			msg_to_render_loop = 'reload'
 		elif command.is_Exit():
 			msg_to_render_loop = 'shutdown'
@@ -268,7 +271,8 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 			state = prev_frame_state
 			return AppControl.Crash(origin='update', cause=action, exception=ex)
 
-		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		actions_to_process.extend(eff_res[ACTIONS])
 
 		debug_log('effects', eff_res[EFFECTS])
 		for command in eff_res[EFFECTS]:
@@ -316,13 +320,14 @@ async def initial_state() -> Eff[[ID, ACTIONS], AppState]:
 
 	# filter_boxes = pmap({
 	# 	box.id_: box
-	# 	for box in (await initial_filter_box_state(filter_id=filter_id) for filter_id in available_filters.keys()) # python 3.6
+	# 	for box in (await initial_filter_box_state(filter_id=filter_id)
+	#   			for filter_id in available_filters.keys())
 	# })
 
 	# n_plots = 2
 	# plots = pmap({
 	# 	plot.id_: plot
-	# 	for plot in (await initial_plot_box_state() for _ in range(n_plots)) # python 3.6
+	# 	for plot in (await initial_plot_box_state() for _ in range(n_plots))
 	# })
 
 
@@ -344,7 +349,7 @@ async def initial_state() -> Eff[[ID, ACTIONS], AppState]:
 	n_plots = 2
 	_plots = {}
 	for _ in range(n_plots):
-		plot = await initial_plot_box_state() # python 3.6
+		plot = await initial_plot_box_state()
 		_plots[plot.id_] = plot
 	plots = pmap(_plots)
 
@@ -410,7 +415,7 @@ async def update(state: AppState, action: Action) -> Eff[[ACTIONS, EFFECTS], App
 		target_id = action.id_
 
 		old_source_box_state = state.source_boxes[target_id]
-		new_source_box_state = await update_source(old_source_box_state, action) # might emit effects
+		new_source_box_state = update_source(old_source_box_state, action) # might emit effects
 		if not (old_source_box_state is new_source_box_state):
 			source_boxes = state['source_boxes']
 			new_state = state.set('source_boxes', source_boxes.set(target_id, new_source_box_state))
@@ -421,7 +426,7 @@ async def update(state: AppState, action: Action) -> Eff[[ACTIONS, EFFECTS], App
 		target_id = action.id_
 
 		old_filter_box_state = state.filter_boxes[target_id]
-		new_filter_box_state = await update_filter_box(old_filter_box_state, action) # might emit effects
+		new_filter_box_state = update_filter_box(old_filter_box_state, action)
 		if not (old_filter_box_state is new_filter_box_state):
 			filter_boxes = state['filter_boxes']
 			new_state = state.set('filter_boxes', filter_boxes.set(target_id, new_filter_box_state))
@@ -436,7 +441,7 @@ async def update(state: AppState, action: Action) -> Eff[[ACTIONS, EFFECTS], App
 		plots = state['plots']
 		old_plot_state = plots[target_id]
 
-		new_plot_state = await update_plot_box(old_plot_state,  action)
+		new_plot_state = update_plot_box(old_plot_state,  action)
 		# signal_data = state.data.box_outputs
 		# new_plot_state = await update_plot_box(old_plot_state, signal_data, action)
 
@@ -492,7 +497,12 @@ async def handle(state: AppState, command) -> Eff[[SIGNAL_ID], IO_[AppState]]:
 
 	if type(command) == FileEffect:
 
-		new_signals, new_signal_names = await handle_file_effect(state.data.signals, state.data.signal_names, command)
+		new_signals, new_signal_names = \
+			await handle_file_effect(
+				state.data.signals,
+				state.data.signal_names,
+				command
+			)
 
 		data = state['data']
 		return state.set('data', data \
@@ -619,7 +629,12 @@ class LinkSelectionAction(sumtype):
 
 
 
-def update_link_selection(state: LinkSelection, graph, action: LinkSelectionAction) -> LinkSelection:
+def update_link_selection(
+		state: LinkSelection,
+		graph,
+		action: LinkSelectionAction
+	) -> LinkSelection:
+
 	if action.is_ClickOutput():
 		return (LinkSelection.empty  if state.src_slot != None else
 				state._replace(src_slot=action.slot) )
@@ -632,9 +647,6 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 	else: action.impossible()
 
 # ----------------------------------------------------------
-
-import reload_util as rlu
-import pathlib
 
 @effectful
 async def draw() -> Eff[[ACTIONS], None]:
@@ -735,7 +747,10 @@ async def draw() -> Eff[[ACTIONS], None]:
 
 	# -------------------------
 	# with window(name="modules"):
-	# 	modules = sorted(rlu.all_modules(dir=pathlib.Path.cwd()), key=lambda mod: (getattr(mod, '__reload_incarnation__', -1), mod.__name__))
+	# 	modules = sorted(
+	#		rlu.all_modules(dir=pathlib.Path.cwd()),
+	#		key=lambda mod: (getattr(mod, '__reload_incarnation__', -1), mod.__name__)
+	#	)
 	# 	for mod in modules:
 	# 		incarnation_text = str(getattr(mod, '__reload_incarnation__', '-'))
 	# 		im.text("{mod}[{inc}]".format(mod=mod.__name__, inc=incarnation_text))
@@ -818,7 +833,8 @@ async def draw() -> Eff[[ACTIONS], None]:
 
 
 
-	# TODO: Window positions can theoretically be accessed after drawing them using the internal API.
+	# TODO: Window positions can theoretically be accessed
+	# after being drawn using internal APIs.
 	# See:
 	#	imgui_internal.h > ImGuiWindow (search "struct IMGUI_API ImGuiWindow")
 	#	imgui.cpp        > ImGui::GetCurrentContext()

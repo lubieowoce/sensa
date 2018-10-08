@@ -195,7 +195,12 @@ def apply_maybe_fn(m_fn, *m_args):
 
 
 
-def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Dict[Id, Any]) -> Dict[Id, List[Maybe[Signal]]]:
+def eval_outputs(
+		graph: Graph,
+		source_signals: Dict[SignalId, Signal],
+		boxes: Dict[Id, Any]
+	) -> Dict[Id, List[Maybe[Signal]]]:
+
 	res = {}
 	source_nodes = {id_: node for (id_, node) in graph.nodes.items()
 					if node.n_inputs == 0}
@@ -205,7 +210,8 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 					if node.n_outputs == 0}
 
 	for (id_, node) in source_nodes.items():
-		eval_node = type(boxes[id_]).eval_node # hacky - should use something like interfaces/typeclasses
+		# hacky - should use something like interfaces/typeclasses
+		eval_node = type(boxes[id_]).eval_node
 		m_output_values = eval_node(boxes[id_])(source_signals)
 		res[id_] = pvector(map(Just, m_output_values.val)
 						   if m_output_values.is_Just()
@@ -216,11 +222,15 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 
 
 	# filters that only depend on source signals
-	constant_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
-							if all(node_id in source_nodes.keys() for node_id in parent_nodes(graph, id_))}
+	constant_trans_nodes = {
+		id_: node for (id_, node) in trans_nodes.items()
+		if all(node_id in source_nodes.keys() for node_id in parent_nodes(graph, id_))
+	}
 	# filters that depend on at least one other filter
-	variable_trans_nodes = {id_: node for (id_, node) in trans_nodes.items()
-							if any(node_id in trans_nodes.keys() for node_id in parent_nodes(graph, id_))}
+	variable_trans_nodes = {
+		id_: node for (id_, node) in trans_nodes.items()
+		if any(node_id in trans_nodes.keys() for node_id in parent_nodes(graph, id_))
+	}
 
 	for node_group in (constant_trans_nodes, variable_trans_nodes, sink_nodes):
 		for (id_, node) in node_group.items():
@@ -229,8 +239,12 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 							  for m_src_slot in slot_sources(graph, id_)]
 
 			# DEBUG
-			assert len(input_m_values) > 0, repr(id_) + " \n " + repr(node) + " \n " + repr(slot_sources(graph, id_))
-			assert_all(input_m_values, lambda m_val: (type(m_val.val) == Signal) if m_val.is_Just() else True)
+			assert len(input_m_values) > 0, \
+				repr(id_) + " \n " + repr(node) + " \n " + repr(slot_sources(graph, id_))
+			assert_all(
+				input_m_values,
+				lambda m_val: (type(m_val.val) == Signal) if m_val.is_Just() else True
+			)
 			# END DEBUG
 
 			# only run the transformation if all arguments are Just
@@ -258,7 +272,10 @@ def eval_outputs(graph: Graph, source_signals: Dict[SignalId, Signal], boxes: Di
 
 
 
-def get_inputs(graph: Graph, output_values: Dict[Id, List[Maybe[Signal]]]) -> Dict[Id, List[Maybe[Signal]]]:
+def get_inputs(
+		graph: Graph,
+		output_values: Dict[Id, List[Maybe[Signal]]]
+	) -> Dict[Id, List[Maybe[Signal]]]:
 	""" Given a `graph` that describes the connections between nodes,
 	where nodes are identified by `Id`'s
 	and the `output_values` of each node in the graph (what each node outputs),
@@ -311,11 +328,11 @@ async def graph_window(graph: Graph) -> Eff[[ACTIONS], IMGui[None]]:
 
 		labels = sorted([str((slot.node_id, slot.ix)) for slot in output_slots(graph)]) 
 		prev_o_source = SELECTED_SLOTS_CONNECT['source']
-		prev_o_source_txt = str((prev_o_source.node_id, prev_o_source.ix)) if prev_o_source != None else None
+		prev_o_source_txt = str((prev_o_source.node_id, prev_o_source.ix)) if prev_o_source is not None else None
 
 		changed, o_source_txt = str_combo_with_none("src##connect", prev_o_source_txt, labels)
 		if changed:
-			o_source = OutputSlotId(*eval(o_source_txt)) if o_source_txt != None else None
+			o_source = OutputSlotId(*eval(o_source_txt)) if o_source_txt is not None else None
 			SELECTED_SLOTS_CONNECT['source'] = o_source
 
 
@@ -323,17 +340,22 @@ async def graph_window(graph: Graph) -> Eff[[ACTIONS], IMGui[None]]:
 
 		labels = sorted([str((slot.node_id, slot.ix)) for slot in free_input_slots(graph)]) 
 		prev_o_dest = SELECTED_SLOTS_CONNECT['dest']
-		prev_o_dest_txt = str((prev_o_dest.node_id, prev_o_dest.ix)) if prev_o_dest != None else None
+		prev_o_dest_txt = str((prev_o_dest.node_id, prev_o_dest.ix)) if prev_o_dest is not None else None
 
 		changed, o_dest_txt = str_combo_with_none("dst##connect", prev_o_dest_txt, labels)
 		if changed:
-			o_dest = InputSlotId(*eval(o_dest_txt)) if o_dest_txt != None else None
+			o_dest = InputSlotId(*eval(o_dest_txt)) if o_dest_txt is not None else None
 			SELECTED_SLOTS_CONNECT['dest'] = o_dest
 
 		# buttons
 		conn = im.button("Connect")
-		if conn and SELECTED_SLOTS_CONNECT['source'] != None and SELECTED_SLOTS_CONNECT['dest'] != None:
-			await emit( GraphAction.Connect(SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']))
+		if (conn and SELECTED_SLOTS_CONNECT['source'] is not None
+			and SELECTED_SLOTS_CONNECT['dest'] is not None):
+			await emit(
+				GraphAction.Connect(
+					SELECTED_SLOTS_CONNECT['source'], SELECTED_SLOTS_CONNECT['dest']
+				)
+			)
 			SELECTED_SLOTS_CONNECT['source'] = None
 			SELECTED_SLOTS_CONNECT['dest']   = None
 
@@ -346,11 +368,11 @@ async def graph_window(graph: Graph) -> Eff[[ACTIONS], IMGui[None]]:
 
 		labels = sorted([str((slot.node_id, slot.ix)) for slot in used_output_slots(graph)]) 
 		prev_o_source = SELECTED_SLOTS_DISCONNECT['source']
-		prev_o_source_txt = str((prev_o_source.node_id, prev_o_source.ix)) if prev_o_source != None else None
+		prev_o_source_txt = str((prev_o_source.node_id, prev_o_source.ix)) if prev_o_source is not None else None
 
 		changed, o_source_txt = str_combo_with_none("src##disconnect", prev_o_source_txt, labels)
 		if changed:
-			o_source = OutputSlotId(*eval(o_source_txt)) if o_source_txt != None else None
+			o_source = OutputSlotId(*eval(o_source_txt)) if o_source_txt is not None else None
 			SELECTED_SLOTS_DISCONNECT['source'] = o_source
 
 
@@ -358,16 +380,22 @@ async def graph_window(graph: Graph) -> Eff[[ACTIONS], IMGui[None]]:
 
 		labels = sorted([str((slot.node_id, slot.ix)) for slot in filled_input_slots(graph)]) 
 		prev_o_dest = SELECTED_SLOTS_DISCONNECT['dest']
-		prev_o_dest_txt = str((prev_o_dest.node_id, prev_o_dest.ix)) if prev_o_dest != None else None
+		prev_o_dest_txt = str((prev_o_dest.node_id, prev_o_dest.ix)) if prev_o_dest is not None else None
 
 		changed, o_dest_txt = str_combo_with_none("dst##disconnect", prev_o_dest_txt, labels)
 		if changed:
-			o_dest = InputSlotId(*eval(o_dest_txt)) if o_dest_txt != None else None
+			o_dest = InputSlotId(*eval(o_dest_txt)) if o_dest_txt is not None else None
 			SELECTED_SLOTS_DISCONNECT['dest'] = o_dest
 
 		conn = im.button("Disconnect")
-		if conn and SELECTED_SLOTS_DISCONNECT['source'] != None and SELECTED_SLOTS_DISCONNECT['dest'] != None:
-			await emit(GraphAction.Disconnect(SELECTED_SLOTS_DISCONNECT['source'], SELECTED_SLOTS_DISCONNECT['dest']))
+		if (conn and SELECTED_SLOTS_DISCONNECT['source'] is not None
+			and SELECTED_SLOTS_DISCONNECT['dest'] is not None):
+			await emit(
+				GraphAction.Disconnect(
+					SELECTED_SLOTS_DISCONNECT['source'],
+					SELECTED_SLOTS_DISCONNECT['dest']
+				)
+			)
 			SELECTED_SLOTS_DISCONNECT['source'] = None
 			SELECTED_SLOTS_DISCONNECT['dest']   = None
 
