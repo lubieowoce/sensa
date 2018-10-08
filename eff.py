@@ -86,6 +86,7 @@ def run_eff(comp: Eff[..., A], **initial_states) -> Tuple[A, Dict]:
 
 
 
+# def effectful(f: Fun[..., Eff[..., A]]):
 def effectful(f):
 	annotation_msg = (
 		'@effectful function {f.__qualname__!r} must have return type annotation ' +
@@ -110,7 +111,10 @@ def effectful(f):
 
 
 def is_decorated_generator_coroutine(f: Fun) -> bool:
-	return f.__code__.co_flags & inspect.CO_ITERABLE_COROUTINE
+	try: 
+		return f.__code__.co_flags & inspect.CO_ITERABLE_COROUTINE
+	except Exception:
+		return False
 
 
 class EffMsg(Enum):
