@@ -14,17 +14,25 @@ import inspect
 from inspect import iscoroutinefunction as is_coroutine_function
 
 from enum import Enum
+
+from sys import version_info as PY_VERSION
 # import flags
 
 A = TypeVar('A')
 
-class enable_class_getitem(type):
-	def __getitem__(cls, item):
-		return cls.__class_getitem__(cls, item)
+
+_Eff_class_kwargs = {}
+
+if PY_VERSION <= (3,7):
+	# to enable Eff[[x, y, z], T] in signatures without using typing.Generic
+	class enable_class_getitem(type):
+		def __getitem__(cls, item):
+			return cls.__class_getitem__(cls, item)
+
+	_Eff_class_kwargs = {'metaclass': enable_class_getitem}
 
 
-# to enable Eff[[x, y, z], T] in signatures
-class Eff(metaclass=enable_class_getitem):
+class Eff(**_Eff_class_kwargs):
 	def __class_getitem__(cls, items: Tuple[List['EffId'], type]):
 		return _Eff(*items)
 
