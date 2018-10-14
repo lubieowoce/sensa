@@ -4,15 +4,15 @@ name = "pypi"
 url = "https://pypi.python.org/simple"
 
 [packages]
-mypy = "*"
 typing = "*"
 pyrsistent = "*"
 scipy = "*"
 networkx = "*"
-cython = "*"
-imgui = {editable = true, extras = ["full"], path = "./../pyimgui"}
-sumtype = "*"
+imgui = {editable = true, extras = ["glfw"], path = "./../pyimgui"}
+PyOpenGL = "==3.1.0"
+sumtype = ">=0.11b0"
 numpy = "*"
+arrayplot = {path = "./../arrayplot", editable = true}
 "1077c9c" = {path = "./../arrayplot", editable = true}
 # imgui = {git = "https://github.com/lubieowoce/pyimgui"}
 
@@ -20,3 +20,8 @@ numpy = "*"
 python_version = "3.5"
 
 [dev-packages]
+mypy = "*"
+cython = "*"
+
+[pipenv]
+allow_prereleases = true
