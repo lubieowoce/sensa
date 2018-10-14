@@ -121,7 +121,7 @@ def sensa_app_init():
 	app_state_init()
 
 	if __was_reloaded__:
-		for cmd in (AppStateEffect.LoadUserActionHistory(), AppStateEffect.RunHistory()):
+		for cmd in (AppStateEffect.LoadUserActionHistory, AppStateEffect.RunHistory):
 			handle_app_state_effect(cmd)
 		__was_reloaded__ = False
 
@@ -231,7 +231,7 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 		command = msg.command
 		if command.is_Reload():
 			# preserve history across reloads
-			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) 
+			handle_app_state_effect(AppStateEffect.SaveUserActionHistory) 
 			msg_to_render_loop = 'reload'
 		elif command.is_Exit():
 			msg_to_render_loop = 'shutdown'
@@ -457,13 +457,13 @@ async def update(state: AppState, action: Action) -> Eff[[ACTIONS, EFFECTS], App
 	elif type(action) == AppStateAction:
 		await emit_effect(
 			{
-				AppStateAction.ResetState():  AppStateEffect.ResetState(),
-			 	AppStateAction.SaveState():   AppStateEffect.SaveState(),
-				AppStateAction.LoadState():   AppStateEffect.LoadState(),
-				AppStateAction.ResetUserActionHistory(): AppStateEffect.ResetUserActionHistory(),
-				AppStateAction.SaveUserActionHistory():  AppStateEffect.SaveUserActionHistory(),
-				AppStateAction.LoadUserActionHistory():  AppStateEffect.LoadUserActionHistory(),
-				AppStateAction.RunHistory(): AppStateEffect.RunHistory(),
+				AppStateAction.ResetState:  AppStateEffect.ResetState,
+			 	AppStateAction.SaveState:   AppStateEffect.SaveState,
+				AppStateAction.LoadState:   AppStateEffect.LoadState,
+				AppStateAction.ResetUserActionHistory: AppStateEffect.ResetUserActionHistory,
+				AppStateAction.SaveUserActionHistory:  AppStateEffect.SaveUserActionHistory,
+				AppStateAction.LoadUserActionHistory:  AppStateEffect.LoadUserActionHistory,
+				AppStateAction.RunHistory: AppStateEffect.RunHistory,
 			}[action]
 		)
 	elif type(action) == AppRunnerAction:
@@ -534,24 +534,24 @@ async def handle(state: AppState, command) -> Eff[[SIGNAL_ID], IO_[AppState]]:
 # the render loop in `reloadable_imgui_app`
 # has to handle those.
 
-class AppStateAction(sumtype):
-	def ResetState(): ...
-	def SaveState(): ...
-	def LoadState(): ...
-	def ResetUserActionHistory(): ...
-	def SaveUserActionHistory(): ...
-	def LoadUserActionHistory(): ...
-	def RunHistory(): ...
+class AppStateAction(sumtype, constants=True):
+	ResetState = ...
+	SaveState = ...
+	LoadState = ...
+	ResetUserActionHistory = ...
+	SaveUserActionHistory = ...
+	LoadUserActionHistory = ...
+	RunHistory = ...
 
 
-class AppStateEffect(sumtype):
-	def ResetState(): ...
-	def SaveState(): ...
-	def LoadState(): ...
-	def ResetUserActionHistory(): ...
-	def SaveUserActionHistory(): ...
-	def LoadUserActionHistory(): ...
-	def RunHistory(): ...
+class AppStateEffect(sumtype, constants=True):
+	ResetState = ...
+	SaveState = ...
+	LoadState = ...
+	ResetUserActionHistory = ...
+	SaveUserActionHistory = ...
+	LoadUserActionHistory = ...
+	RunHistory = ...
 
 # Actions that only the loop that actually
 # runs the function can handle
@@ -801,34 +801,35 @@ async def draw() -> Eff[[ACTIONS], None]:
 
 		im.same_line()
 		if im.button("dump##state"):
-			await emit(AppStateAction.SaveState())
+			await emit(AppStateAction.SaveState)
 
 		im.same_line()
 		if im.button("load##state"):
-			await emit(AppStateAction.LoadState())
+			await emit(AppStateAction.LoadState)
 
 		im.same_line()
 		if im.button("reset##state"):
-			await emit(AppStateAction.ResetState())
+			await emit(AppStateAction.ResetState
+)
 
 
 		im.text("history | ")
 
 		im.same_line()
 		if im.button("dump##history"):
-			await emit(AppStateAction.SaveUserActionHistory())
+			await emit(AppStateAction.SaveUserActionHistory)
 
 		im.same_line()
 		if im.button("load##history"):
-			await emit(AppStateAction.LoadUserActionHistory())
+			await emit(AppStateAction.LoadUserActionHistory)
 
 		im.same_line()
 		if im.button("reset##history"):
-			await emit(AppStateAction.ResetUserActionHistory())
+			await emit(AppStateAction.ResetUserActionHistory)
 
 		im.same_line()
 		if im.button("run##history"):
-			await emit(AppStateAction.RunHistory())
+			await emit(AppStateAction.RunHistory)
 
 
 
