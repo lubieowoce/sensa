@@ -19,8 +19,8 @@ import utils as util
 
 from eff import (
 	Eff, effectful,
-	ID, EFFECTS, SIGNAL_ID, ACTIONS,
-	eff_operation,
+	ID, ACTIONS,
+	emit, get_id, 
 )
 import node_graph as ng
 
@@ -95,25 +95,25 @@ FilterBoxAction = Union[FILTER_BOX_ACTION_TYPES]
 def is_filter_box_full(state: FilterBoxState) -> bool:
 	return state .filter_state .is_Filter()
 
-@effectful(ID, ACTIONS)
-def initial_filter_box_state(filter_id: FilterId) -> Eff(ID, ACTIONS)[FilterBoxState]:
-	get_id = eff_operation('get_id')
-	emit = eff_operation('emit')
-
-	id_ = get_id()
+@effectful
+async def initial_filter_box_state(filter_id: FilterId) -> Eff[[ID, ACTIONS], FilterBoxState]:
+	id_ = await get_id()
 	state = FilterBoxState(
 		id_=id_,
 		filter_state=FilterState.Filter(filter_id=filter_id, params=default_parameters[filter_id] )
 	)
-	emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state)))
+	await emit(ng.GraphAction.AddNode(id_=id_, node=to_node(state))) # TODO: Shouldn't be here
 
 	return state
 
 
 
 
-@effectful(ACTIONS)
-def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction) -> Eff(ACTIONS)[FilterBoxState]:
+def update_filter_box(
+		filter_box_state: FilterBoxState,
+		action: FilterBoxAction
+	) -> FilterBoxState:
+
 	assert filter_box_state.id_ == action.id_
 	old_state = filter_box_state
 	new_state = None
@@ -138,12 +138,11 @@ def update_filter_box(filter_box_state: FilterBoxState, action: FilterBoxAction)
 
 
 
-@effectful(ACTIONS)
-def filter_box_window(
-	filter_box_state: FilterBoxState,
-	ui_settings) -> Eff(ACTIONS)[IMGui[None]]:
-
-	emit = eff_operation('emit')
+@effectful
+async def filter_box_window(
+		filter_box_state: FilterBoxState,
+		ui_settings
+	) -> Eff[[ACTIONS], IMGui[None]]:
 
 	name = None
 	if filter_box_state .filter_state .is_Filter():
@@ -163,9 +162,9 @@ def filter_box_window(
 		# changed, o_filter_id = str_combo_with_none("filter", o_filter_id, filter_ids)
 		# if changed:
 		# 	if o_filter_id != None:
-		# 		emit( SetFilter(id_=filter_box_state.id_, filter_id=o_filter_id) )
+		# 		await emit( SetFilter(id_=filter_box_state.id_, filter_id=o_filter_id) )
 		# 	else:
-		# 		emit( UnsetFilter(id_=filter_box_state.id_) )
+		# 		await emit( UnsetFilter(id_=filter_box_state.id_) )
 
 
 		# param inputs
@@ -183,7 +182,7 @@ def filter_box_window(
 														 min_value=0.001, max_value=95.,
 														 power=slider_power)
 				if changed:
-					emit( FilterAction.SetParam(id_=filter_box_state.id_, name=param_name, value=new_param_val) )
+					await emit( FilterAction.SetParam(id_=filter_box_state.id_, name=param_name, value=new_param_val) )
 
 
 			

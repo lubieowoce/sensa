@@ -4,25 +4,15 @@ from typing import (
 	Tuple, Dict,
 )
 from utils.types import (
+	SignalId,
 	PMap_,
 	IO_,
 )
-from utils import impossible
 from sumtype import sumtype
 
 from eff import (
 	Eff, effectful,
-	EFFECTS, SIGNAL_ID, ACTIONS,
-	eff_operation,
-)
-from utils.types import (
-	SignalId,
-)
-
-from eff import (
-	Eff, effectful,
 	SIGNAL_ID, 
-	eff_operation,
 	get_signal_ids,
 )
 
@@ -43,12 +33,12 @@ class FileEffect(sumtype):
 
 
 
-
-@effectful(SIGNAL_ID)
-def handle_file_effect(signals: PMap_[SignalId, Signal],
-					   signal_names: PMap_[SignalId, str],
-					   command: FileEffect) -> IO_[ Tuple[ PMap_[SignalId, Signal],
-														   PMap_[SignalId, str]    ] ]:
+@effectful
+async def handle_file_effect(
+		signals: PMap_[SignalId, Signal],
+		signal_names: PMap_[SignalId, str],
+		command: FileEffect
+	) -> Eff[[SIGNAL_ID],  IO_[  Tuple[ PMap_[SignalId, Signal], PMap_[SignalId, str] ]  ]]:
 
 	if command.is_Load():
 		new_signals = load_edf(command.filename)
@@ -59,8 +49,9 @@ def handle_file_effect(signals: PMap_[SignalId, Signal],
 		# first, map ids to signal names
 		new_signal_names = {sig_id: name
 							for (sig_id, name)
-							in zip(get_signal_ids(n_signals),
-								   sorted(new_signals.keys())) # sorted so that ids are assigned deterministaclly
+							in zip(await get_signal_ids(n_signals),
+								   # sorted so that ids are assigned deterministically
+								   sorted(new_signals.keys()))
 						   }
 		# then, map the ids to the correct signals
 		new_signals = {sig_id: new_signals[sig_name]

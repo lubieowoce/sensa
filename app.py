@@ -42,9 +42,9 @@ from eff import (
 	Eff, run_eff,
 	effectful,
 	ID, EFFECTS, SIGNAL_ID, ACTIONS,
-	get_ids,
-	eff_operation,
-	get_signal_ids,
+
+	emit, emit_effect,
+	get_ids, get_signal_ids,
 )
 
 import utils as util
@@ -141,15 +141,16 @@ def app_state_init():
 	current_signal_id = 0
 	
 	# create the initial state	
-	state, eff_res = run_eff(initial_state, id=current_id, actions=[])()
+	state, eff_res = run_eff(initial_state(), id=current_id, actions=[])
 	current_id        = eff_res[ID]
 	for action in eff_res[ACTIONS]:
-		state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
+		state, eff_res = run_eff(update(state, action), actions=[], effects=[])
 
-		eff_res[ACTIONS].extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		eff_res[ACTIONS].extend(eff_res[ACTIONS]) 
 
 		for command in eff_res[EFFECTS]:
-			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
 			current_signal_id = eff_res[SIGNAL_ID]
 
 	assert state != None
@@ -157,12 +158,13 @@ def app_state_init():
 	# run the initial actions
 	for act in INITIAL_ACTIONS:
 
-		state, eff_res = run_eff(update, actions=[], effects=[])(state, act)
+		state, eff_res = run_eff(update(state, act), actions=[], effects=[])
 
-		INITIAL_ACTIONS.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		INITIAL_ACTIONS.extend(eff_res[ACTIONS])
 
 		for command in eff_res[EFFECTS]:
-			state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+			state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
 			current_signal_id = eff_res[SIGNAL_ID]
 
 
@@ -194,7 +196,7 @@ def app_state_init():
 def draw_and_log_actions() -> IO_[None]:
 	global frame_actions
 
-	_, eff_res = run_eff(  draw,   actions=[])()
+	_, eff_res = run_eff(  draw(),   actions=[])
 
 	frame_actions = eff_res[ACTIONS]
 	# since this will be called by run_glfw_app,
@@ -228,7 +230,8 @@ def sensa_post_frame() -> IO_[Optional[str]]:
 	elif msg.is_DoAppRunner():
 		command = msg.command
 		if command.is_Reload():
-			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) # preserve history across reloads
+			# preserve history across reloads
+			handle_app_state_effect(AppStateEffect.SaveUserActionHistory()) 
 			msg_to_render_loop = 'reload'
 		elif command.is_Exit():
 			msg_to_render_loop = 'shutdown'
@@ -263,12 +266,13 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 	for action in actions_to_process:
 		# print("\t{}".format(action), flush=True)
 		try:
-			state, eff_res = run_eff(update, actions=[], effects=[])(state, action)
+			state, eff_res = run_eff(update(state, action), actions=[], effects=[])
 		except Exception as ex:
 			state = prev_frame_state
 			return AppControl.Crash(origin='update', cause=action, exception=ex)
 
-		actions_to_process.extend(eff_res[ACTIONS]) # so we can process actions emitted during updating, if any
+		# so we can process actions emitted during updating, if any
+		actions_to_process.extend(eff_res[ACTIONS])
 
 		debug_log('effects', eff_res[EFFECTS])
 		for command in eff_res[EFFECTS]:
@@ -284,7 +288,7 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 			# higher up" to be handled elswhere.
 
 			try:
-				state, eff_res = run_eff(handle, signal_id=current_signal_id)(state, command)
+				state, eff_res = run_eff(handle(state, command), signal_id=current_signal_id)
 			except Exception as ex:
 				state = prev_frame_state
 				return AppControl.Crash(origin='handle', cause=command, exception=ex)
@@ -302,35 +306,59 @@ def update_state_with_actions_and_run_effects(user_actions) -> IO_['AppControl']
 # ==============================================
 
 
-
-
 AppState = PMap_[str, Any]
 
-@effectful(ID, ACTIONS)
-def initial_state() -> Eff(ID, ACTIONS)[AppState]:
-	emit = eff_operation('emit')
-	# output_signal_names = pmap({sig_id: 'filter_{id}_output'.format(id=id) 
-	# 							for (id, sig_id) in output_ids.items()})
+@effectful
+async def initial_state() -> Eff[[ID, ACTIONS], AppState]:
 
+	# # python 3.6
+	# n_source_boxes = 1
+	# source_boxes = pmap({
+	# 	box.id_: box
+	# 	for box in (await initial_source_state() for _ in range(n_source_boxes))
+	# })
+
+	# filter_boxes = pmap({
+	# 	box.id_: box
+	# 	for box in (await initial_filter_box_state(filter_id=filter_id)
+	#   			for filter_id in available_filters.keys())
+	# })
+
+	# n_plots = 2
+	# plots = pmap({
+	# 	plot.id_: plot
+	# 	for plot in (await initial_plot_box_state() for _ in range(n_plots))
+	# })
 
 
 	n_source_boxes = 1
-	source_boxes = pmap({box.id_: box
-					  	 for box in (initial_source_state() for _ in range(n_source_boxes))})
-	# n_filter_boxes = 2
-	filter_boxes = pmap({box.id_: box
-					  	 for box in (initial_filter_box_state(filter_id=filter_id) for filter_id in available_filters.keys())})
-	n_plots = 2
-	plots = pmap({plot.id_: plot
-				  for plot in (initial_plot_box_state() for _ in range(n_plots))})
+	_source_boxes = {}
+	for _ in range(n_source_boxes):
+		box = await initial_source_state()
+		_source_boxes[box.id_] = box
+	source_boxes = pmap(_source_boxes)
 
-	for group in (source_boxes, filter_boxes, plots):
-		for (id_, box) in group.items():
-			emit(ng.GraphAction.AddNode(id_, box.to_node()))
+
+	_filter_boxes = {}
+	for filter_id in available_filters.keys(): 
+		box = await initial_filter_box_state(filter_id=filter_id)
+		_filter_boxes[box.id_] = box
+	filter_boxes = pmap(_filter_boxes)
+
+
+	n_plots = 2
+	_plots = {}
+	for _ in range(n_plots):
+		plot = await initial_plot_box_state()
+		_plots[plot.id_] = plot
+	plots = pmap(_plots)
+
+
+	for boxes in (source_boxes, filter_boxes, plots):
+		for (id_, box) in boxes.items():
+			await emit(ng.GraphAction.AddNode(id_, box.to_node()))
 
 	return m(
-		resources = m(),
-
 		data = m(
 			signals = m(),      # type: PMap_[SignalId, Signal]
 			signal_names = m(), # type: PMap_[SignalId, str]
@@ -350,9 +378,8 @@ def initial_state() -> Eff(ID, ACTIONS)[AppState]:
 
 
 
-@effectful(ACTIONS, EFFECTS)
-def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
-	emit = eff_operation('emit'); emit_effect = eff_operation('emit_effect')
+@effectful
+async def update(state: AppState, action: Action) -> Eff[[ACTIONS, EFFECTS], AppState]:
 
 	new_state = None
 	o_changed_box = None
@@ -367,9 +394,9 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			can_create_link     = ng.is_input_slot_free(state.graph, link[1])
 			link_already_exists = link in state.graph.links
 			if link_already_exists:
-				emit( ng.GraphAction.Disconnect(*link) )
+				await emit( ng.GraphAction.Disconnect(*link) )
 			elif can_create_link:
-				emit( ng.GraphAction.Connect(*link) )
+				await emit( ng.GraphAction.Connect(*link) )
 			else: 
 				# link is invalid - e.g. connects to a filled slot
 				# but we empty it after anyway, so do nothing
@@ -381,7 +408,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 	elif type(action) == ng.GraphAction:
 		graph = state.graph
-		new_state = state.set('graph', ng.update_graph(graph, action))
+		new_state = state.set('graph', await ng.update_graph(graph, action))
 
 	elif type(action) == SourceAction:
 		debug_log('updating', 'source')
@@ -399,7 +426,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 		target_id = action.id_
 
 		old_filter_box_state = state.filter_boxes[target_id]
-		new_filter_box_state = update_filter_box(old_filter_box_state, action) # might emit effects
+		new_filter_box_state = update_filter_box(old_filter_box_state, action)
 		if not (old_filter_box_state is new_filter_box_state):
 			filter_boxes = state['filter_boxes']
 			new_state = state.set('filter_boxes', filter_boxes.set(target_id, new_filter_box_state))
@@ -416,7 +443,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 		new_plot_state = update_plot_box(old_plot_state,  action)
 		# signal_data = state.data.box_outputs
-		# new_plot_state = update_plot_box(old_plot_state, signal_data, action)
+		# new_plot_state = await update_plot_box(old_plot_state, signal_data, action)
 
 		if not (old_plot_state is new_plot_state): # reference comparison for speed
 			new_state = state.set('plots', plots.set(target_id, new_plot_state))
@@ -425,10 +452,10 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 	elif type(action) == FileAction:
 		if action.is_Load():
-			emit_effect( FileEffect.Load(action.filename) )
+			await emit_effect( FileEffect.Load(action.filename) )
 
 	elif type(action) == AppStateAction:
-		emit_effect(
+		await emit_effect(
 			{
 				AppStateAction.ResetState():  AppStateEffect.ResetState(),
 			 	AppStateAction.SaveState():   AppStateEffect.SaveState(),
@@ -440,7 +467,7 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 			}[action]
 		)
 	elif type(action) == AppRunnerAction:
-		emit_effect(
+		await emit_effect(
 			{
 				AppRunnerAction.Reload(): AppRunnerEffect.Reload(),
 			 	AppRunnerAction.Exit():   AppRunnerEffect.Exit(),
@@ -451,8 +478,8 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 
 	if o_changed_box != None:
-		# emit(ng.NodeChanged(id_=o_changed_box))
-		emit_effect(ng.GraphEffect.EvalGraph())
+		# await emit(ng.NodeChanged(id_=o_changed_box))
+		await emit_effect(ng.GraphEffect.EvalGraph())
 
 	return (new_state if new_state is not None else state) \
 			.transform(['n_actions'], lambda x: x+1)	
@@ -464,13 +491,18 @@ def update(state: AppState, action: Action) -> Eff(ACTIONS, EFFECTS)[AppState]:
 
 
 
-@effectful(SIGNAL_ID)
-def handle(state: AppState, command) -> Eff(SIGNAL_ID)[IO_[AppState]]:
+@effectful
+async def handle(state: AppState, command) -> Eff[[SIGNAL_ID], IO_[AppState]]:
 	global current_id, current_signal_id  # used for state saving/loading
 
 	if type(command) == FileEffect:
 
-		new_signals, new_signal_names = handle_file_effect(state.data.signals, state.data.signal_names, command)
+		new_signals, new_signal_names = \
+			await handle_file_effect(
+				state.data.signals,
+				state.data.signal_names,
+				command
+			)
 
 		data = state['data']
 		return state.set('data', data \
@@ -597,7 +629,12 @@ class LinkSelectionAction(sumtype):
 
 
 
-def update_link_selection(state: LinkSelection, graph, action: LinkSelectionAction) -> LinkSelection:
+def update_link_selection(
+		state: LinkSelection,
+		graph,
+		action: LinkSelectionAction
+	) -> LinkSelection:
+
 	if action.is_ClickOutput():
 		return (LinkSelection.empty  if state.src_slot != None else
 				state._replace(src_slot=action.slot) )
@@ -611,12 +648,8 @@ def update_link_selection(state: LinkSelection, graph, action: LinkSelectionActi
 
 # ----------------------------------------------------------
 
-import reload_util as rlu
-import pathlib
-
-@effectful(ACTIONS)
-def draw() -> Eff(ACTIONS)[None]:
-	emit = eff_operation('emit')
+@effectful
+async def draw() -> Eff[[ACTIONS], None]:
 
 	global state
 
@@ -694,7 +727,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	with window(name="signals"):
 		if im.button("load example"):
-			emit( FileAction.Load(filename=example_file_path) )
+			await emit( FileAction.Load(filename=example_file_path) )
 
 
 		if len(state.data.signals) > 0:
@@ -714,7 +747,10 @@ def draw() -> Eff(ACTIONS)[None]:
 
 	# -------------------------
 	# with window(name="modules"):
-	# 	modules = sorted(rlu.all_modules(dir=pathlib.Path.cwd()), key=lambda mod: (getattr(mod, '__reload_incarnation__', -1), mod.__name__))
+	# 	modules = sorted(
+	#		rlu.all_modules(dir=pathlib.Path.cwd()),
+	#		key=lambda mod: (getattr(mod, '__reload_incarnation__', -1), mod.__name__)
+	#	)
 	# 	for mod in modules:
 	# 		incarnation_text = str(getattr(mod, '__reload_incarnation__', '-'))
 	# 		im.text("{mod}[{inc}]".format(mod=mod.__name__, inc=incarnation_text))
@@ -753,7 +789,7 @@ def draw() -> Eff(ACTIONS)[None]:
 			ui_settings['filter_slider_power'] = val
 
 		if im.button("reload"):
-			emit(AppRunnerAction.Reload())
+			await emit(AppRunnerAction.Reload())
 
 		# im.same_line()
 		# im.button("bla bla bla")
@@ -765,39 +801,40 @@ def draw() -> Eff(ACTIONS)[None]:
 
 		im.same_line()
 		if im.button("dump##state"):
-			emit(AppStateAction.SaveState())
+			await emit(AppStateAction.SaveState())
 
 		im.same_line()
 		if im.button("load##state"):
-			emit(AppStateAction.LoadState())
+			await emit(AppStateAction.LoadState())
 
 		im.same_line()
 		if im.button("reset##state"):
-			emit(AppStateAction.ResetState())
+			await emit(AppStateAction.ResetState())
 
 
 		im.text("history | ")
 
 		im.same_line()
 		if im.button("dump##history"):
-			emit(AppStateAction.SaveUserActionHistory())
+			await emit(AppStateAction.SaveUserActionHistory())
 
 		im.same_line()
 		if im.button("load##history"):
-			emit(AppStateAction.LoadUserActionHistory())
+			await emit(AppStateAction.LoadUserActionHistory())
 
 		im.same_line()
 		if im.button("reset##history"):
-			emit(AppStateAction.ResetUserActionHistory())
+			await emit(AppStateAction.ResetUserActionHistory())
 
 		im.same_line()
 		if im.button("run##history"):
-			emit(AppStateAction.RunHistory())
+			await emit(AppStateAction.RunHistory())
 
 
 
 
-	# TODO: Window positions can theoretically be accessed after drawing them using the internal API.
+	# TODO: Window positions can theoretically be accessed
+	# after being drawn using internal APIs.
 	# See:
 	#	imgui_internal.h > ImGuiWindow (search "struct IMGUI_API ImGuiWindow")
 	#	imgui.cpp        > ImGui::GetCurrentContext()
@@ -819,7 +856,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 
 	# ----------------------------
-	# ng.graph_window(state.graph)
+	# await ng.graph_window(state.graph)
 
 
 	prev_color_window_background = im.get_style().color(im.COLOR_WINDOW_BACKGROUND)
@@ -844,7 +881,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 			# source boxes
 			for (id_, box_state) in state.source_boxes.items():
-				pos = signal_source_window(
+				pos = await signal_source_window(
 							box_state,
 							state.data.signals,
 							state.data.signal_names
@@ -854,7 +891,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 			# filter boxes
 			for (id_, box_state) in state.filter_boxes.items():
-				pos = filter_box_window(
+				pos = await filter_box_window(
 							box_state,
 							ui_settings=ui_settings
 					  )
@@ -864,7 +901,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 			# signal plot 1
 			for (id_, box_state) in state.plots.items():
-				pos = signal_plot_window(box_state,
+				pos = await signal_plot_window(box_state,
 									inputs[id_],
 									ui_settings=ui_settings)
 				box_positions[id_] = pos
@@ -898,7 +935,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 					changed, selected = im.checkbox("##in{}{}".format(id_, slot_ix), was_selected)
 					if changed:
-						emit(LinkSelectionAction.ClickInput(slot))
+						await emit(LinkSelectionAction.ClickInput(slot))
 
 					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
 					slot_center_positions[('in', id_, slot_ix)] = center_pos
@@ -912,7 +949,7 @@ def draw() -> Eff(ACTIONS)[None]:
 
 					changed, selected = im.checkbox("##out{}{}".format(id_, slot_ix), was_selected)
 					if changed:
-						emit(LinkSelectionAction.ClickOutput(slot))
+						await emit(LinkSelectionAction.ClickOutput(slot))
 
 					center_pos = util.rect_center(util.get_item_rect()) # bounding rect of prev widget
 					slot_center_positions[('out', id_, slot_ix)] = center_pos
