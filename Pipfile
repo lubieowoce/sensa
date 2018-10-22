@@ -8,20 +8,17 @@ typing = "*"
 pyrsistent = "*"
 scipy = "*"
 networkx = "*"
-imgui = {editable = true, extras = ["glfw"], path = "./../pyimgui"}
 PyOpenGL = "==3.1.0"
 sumtype = ">=0.11b0"
 numpy = "*"
 arrayplot = {path = "./../arrayplot", editable = true}
-"1077c9c" = {path = "./../arrayplot", editable = true}
+"ed59412" = {editable = true, extras = ["glfw"], path = "./../pyimgui"}
+# imgui = {editable = true, extras = ["glfw"], path = "./../pyimgui"}
+# "1077c9c" = {path = "./../arrayplot", editable = true}
 # imgui = {git = "https://github.com/lubieowoce/pyimgui"}
 
 [requires]
 python_version = "3.5"
-
-[dev-packages]
-mypy = "*"
-cython = "*"
 
 [pipenv]
 allow_prereleases = true

@@ -40,10 +40,11 @@ def add_rect_coords(draw_list, top_left: Vec2, bottom_right: Vec2, color) -> IMG
 	top_right   = Vec2(bottom_right.x, top_left.y)
 	bottom_left = Vec2(top_left.x, bottom_right.y)
 	# draw rect clockwise from top left
-	draw_list.add_line(top_left, top_right, color=color)
-	draw_list.add_line(top_right, bottom_right, color=color)
-	draw_list.add_line(bottom_right, bottom_left, color=color)
-	draw_list.add_line(bottom_left, top_left, color=color)
+	color = im.get_color_u32_rgba(*color)
+	draw_list.add_line(*top_left, *top_right, col=color)
+	draw_list.add_line(*top_right, *bottom_right, col=color)
+	draw_list.add_line(*bottom_right, *bottom_left, col=color)
+	draw_list.add_line(*bottom_left, *top_left, col=color)
 
 
 def add_rect(draw_list, rect: Rect, color) -> IMGui[None]:

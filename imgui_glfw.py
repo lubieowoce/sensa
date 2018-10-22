@@ -28,7 +28,6 @@ def DEFAULT_DRAW():
 
 
 
-
 def run_reloadable_imgui_app(app_module, no_reload=()):
 
 	no_reload = no_reload + (__name__,)
@@ -129,6 +128,7 @@ def run_reloadable_imgui_app(app_module, no_reload=()):
 				gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 
 				imgui.render()
+				renderer.render(imgui.get_draw_data())
 				glfw.swap_buffers(window)
 
 			frame_end = glfw.get_time() # seconds
@@ -164,8 +164,8 @@ def run_reloadable_imgui_app(app_module, no_reload=()):
 	# =========================
 
 	renderer.shutdown()
-	imgui.shutdown()
 	glfw.terminate()
+
 
 
 

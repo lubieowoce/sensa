@@ -115,7 +115,7 @@ frame_actions = None
 user_action_history = None
 
 
-def sensa_app_init():
+def sensa_app_init() -> 'ImGui[None]':
 	global __was_reloaded__
 
 	app_state_init()
@@ -124,6 +124,9 @@ def sensa_app_init():
 		for cmd in (AppStateEffect.LoadUserActionHistory, AppStateEffect.RunHistory):
 			handle_app_state_effect(cmd)
 		__was_reloaded__ = False
+
+	im.style_colors_light()
+
 
 
 def app_state_init():
@@ -650,13 +653,10 @@ def update_link_selection(
 
 @effectful
 async def draw() -> Eff[[ACTIONS], None]:
-
 	global state
 
 	im.show_metrics_window()
 	im.show_test_window()
-
-
 
 	# ------------------------
 	# t_flags = 0
@@ -681,6 +681,10 @@ async def draw() -> Eff[[ACTIONS], None]:
 	# 	im.text('TL: '+str(top_left))
 	# 	im.text('BR: '+str(bottom_right))
 	# 	util.add_rect(im.get_window_draw_list(), util.Rect(top_left, bottom_right), (1.,1.,1.,1.))
+
+
+
+	
 	debug_log("test_drew", False)
 	with window("test") as (expanded, _):
 		only_draw_if(expanded)
@@ -964,7 +968,7 @@ async def draw() -> Eff[[ACTIONS], None]:
 		for (src, dst) in state.graph.links:
 			src_pos = slot_center_positions[('out', src.node_id, src.ix)]
 			dst_pos = slot_center_positions[('in',  dst.node_id, dst.ix)]
-			draw_list.add_line(src_pos, dst_pos, color=(0.5, 0.5, 0.5, 1.), thickness=2.)
+			draw_list.add_line(*src_pos, *dst_pos, col=im.get_color_u32_rgba(0.5, 0.5, 0.5, 1.), thickness=2.)
 
 
 		im.set_cursor_screen_position(prev_cursor_screen_pos)

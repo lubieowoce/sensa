@@ -277,7 +277,7 @@ async def signal_plot(
 	assert ((type(m_signal.val) == Signal) if m_signal.is_Just() else True), repr(m_signal)
 	drag_state = plot_box_state .drag_state
 
-	im.push_style_color(im.COLOR_CHILD_WINDOW_BACKGROUND, 1., 1., 1., 0.05)
+	im.push_style_color(im.COLOR_CHILD_BACKGROUND, 1., 1., 1., 0.05)
 	with draggable(name="signal_plot##"+str(plot_box_state.id_),
 					was_down=drag_state.is_Dragging(),
 					width=width, height=height) as (status, is_down):
@@ -453,7 +453,7 @@ def show_full_plot(plot_box_state: PlotState,
 	mid_line_start = Vec2(left_x,  middle_y)
 	mid_line_end   = Vec2(right_x, middle_y)
 
-	draw_list.add_line(mid_line_start, mid_line_end, color=white)
+	draw_list.add_line(*mid_line_start, *mid_line_end, col=im.get_color_u32_rgba(*white))
 
 
 
@@ -533,20 +533,20 @@ def show_full_plot(plot_box_state: PlotState,
 	first_point_x_offset = first_point_offset_t * px_per_1second
 	first_point_x = left_x + first_point_x_offset
 
-	transparent = (0., 0., 0., 0.01)
-	grue = (0.2, 0.7, 0.8, 1)
+	transparent = im.get_color_u32_rgba(0., 0., 0., 0.01)
+	grue = im.get_color_u32_rgba(0.2, 0.7, 0.8, 1)
 	# made local for perf - shaves off 0.5 ms
 	add_line = draw_list.add_line
 
 
 	debug_log_time(WAVE_DRAW_START)
 
-	# Reuse the same point object every iteration
-	# to avoid allocations
-	# (We're basically using these as mutable tuples)
-	point1 = [0., 0.]
-	point2 = [0., 0.]
-	# add up to about ~1.5 ms 
+	# # Reuse the same point object every iteration
+	# # to avoid allocations
+	# # (We're basically using these as mutable tuples)
+	# point1 = [0., 0.]
+	# point2 = [0., 0.]
+	# # add up to about ~1.5 ms 
 
 	# surprisingly, faster than a while loop
 	for i in range(0, len(ys)-1): # the last one doesn't have a next point to draw a line to, hence the -1
@@ -564,10 +564,10 @@ def show_full_plot(plot_box_state: PlotState,
 		# # and reusing the same one every time 
 		# # would speed it up considerably
 
-		point1[0] = x1; point1[1] = y1
-		point2[0] = x2; point2[1] = y2
+		# point1[0] = x1; point1[1] = y1
+		# point2[0] = x2; point2[1] = y2
 
-		add_line(point1, point2, color=grue, thickness=2.0)
+		add_line(x1, y1, x2, y2, col=grue, thickness=2.0)
 		# calls to `add_line` add up to ~3ms
 
 
@@ -580,7 +580,8 @@ def show_full_plot(plot_box_state: PlotState,
 	# draw a line at drag location
 	if plot_box_state .drag_state .is_Dragging():
 		mouse_x, _ = get_mouse_position()
-		draw_list.add_line(Vec2(mouse_x, bottom_y), Vec2(mouse_x, top_y), color=white)
+		draw_list.add_line(mouse_x, bottom_y, mouse_x, top_y, col=im.get_color_u32_rgba(*white))
+		# draw_list.add_line(Vec2(mouse_x, bottom_y), Vec2(mouse_x, top_y), color=white)
 
 
 
